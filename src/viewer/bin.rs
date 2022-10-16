@@ -6,7 +6,7 @@ use druid::{
 
 use mandelox::coord::{Axis, Viewport};
 use mandelox::painter::{convert_image, Painter as MandeloxPainter, RainbowPainter};
-use mandelox::{MandelbrotSolver, MandelbrotState};
+use mandelox::{IterSolver, MbSolver, MbState};
 
 const DEFAULT_VIEWPORT: Viewport = Viewport {
     x: Axis {
@@ -49,8 +49,8 @@ fn build_mandelbrot_painter() -> Painter<Viewport> {
     Painter::new(|ctx: &mut PaintCtx, data: &Viewport, _env: &Env| {
         let Size { width, height } = ctx.size();
 
-        let initial = MandelbrotState::initialize(width as usize, height as usize, data);
-        let solver = MandelbrotSolver::new(2.0);
+        let initial = MbState::initialize(width as usize, height as usize, data);
+        let solver = MbSolver::new(2.0);
         let solved = solver.iterate_n(&initial, 100);
         let painter = RainbowPainter::new(100.0);
         let image = painter.paint(solved.i_values());
