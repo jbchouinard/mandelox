@@ -1,4 +1,4 @@
-use std::sync::{mpsc, Arc};
+use std::sync::Arc;
 use std::thread;
 
 use ndarray::{Array2, Zip};
@@ -81,34 +81,26 @@ impl ThreadedMbSolver {
 impl IterSolver for ThreadedMbSolver {
     fn iterate_n(&self, state: &MbState, n: u16) -> MbState {
         let states = state.split(self.threads);
-        let (tx, rx) = mpsc::channel();
 
         let mut handles = vec![];
         for (sn, state) in states.into_iter().enumerate() {
-            let txi = tx.clone();
             let treshold = self.treshold;
             let handle = thread::spawn(move || {
                 let solver = MbSolver::new(treshold);
                 let solved = solver.iterate_n(&state, n);
-                txi.send(MbStateSegment {
+                MbStateSegment {
                     n: sn,
                     state: solved,
-                })
-                .unwrap();
+                }
             });
             handles.push(handle);
         }
 
-        for handle in handles {
-            handle.join().unwrap();
-        }
-
         let mut opt_solved_states: Vec<Option<MbState>> = vec![None; self.threads];
-        for _ in 0..self.threads {
-            let segment: MbStateSegment = rx.try_recv().unwrap();
+        for handle in handles {
+            let segment: MbStateSegment = handle.join().unwrap();
             opt_solved_states[segment.n] = Some(segment.state);
         }
-
         let mut solved_states: Vec<MbState> = vec![];
         for opt_state in opt_solved_states {
             match opt_state {

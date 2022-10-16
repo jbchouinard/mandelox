@@ -1,6 +1,6 @@
 use druid::{Data, Lens};
 
-#[derive(Clone, Data, Lens)]
+#[derive(Clone, Debug, Data, Lens)]
 pub struct Axis {
     pub min: f64,
     pub max: f64,
@@ -20,7 +20,7 @@ impl Axis {
     }
 }
 
-#[derive(Clone, Data, Lens)]
+#[derive(Clone, Debug, Data, Lens)]
 pub struct Viewport {
     pub x: Axis,
     pub y: Axis,
