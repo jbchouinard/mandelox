@@ -1,0 +1,26 @@
+[package]
+name = "mandelox"
+version = "0.1.0"
+edition = "2021"
+default-run = "mandelox-viewer"
+
+[lib]
+name = "mandelox"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mandelox-gif"
+path = "src/imagegen/bin.rs"
+
+[[bin]]
+name = "mandelox-viewer"
+path = "src/viewer/bin.rs"
+
+# [profile.release]
+# debug = true
+
+[dependencies]
+druid = { git = "https://github.com/linebender/druid.git" }
+image = "0.24.4"
+ndarray = "0.15.6"
+num = "0.4.0"
