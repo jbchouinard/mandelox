@@ -16,6 +16,10 @@ path = "src/imagegen/bin.rs"
 name = "mandelox-viewer"
 path = "src/viewer/bin.rs"
 
+[[bin]]
+name = "bench-solver"
+path = "src/bench/solver.rs"
+
 # [profile.release]
 # debug = true
 

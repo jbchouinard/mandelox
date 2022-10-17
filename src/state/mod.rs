@@ -35,6 +35,49 @@ fn generate_complex_grid(width: usize, height: usize, grid: &Viewport) -> Array2
 }
 
 #[derive(Clone, Debug)]
+pub struct MbVecCell {
+    c: C<f64>,
+    z: C<f64>,
+    i: i16,
+}
+
+#[derive(Clone, Debug)]
+pub struct MbVecState {
+    width: usize,
+    height: usize,
+    iteration: i16,
+    state: Vec<MbVecCell>,
+}
+
+impl MbVecState {
+    pub fn initialize(width: usize, height: usize, grid: &Viewport) -> Self {
+        let x_b = cr(grid.x.min);
+        let x_m = cr(grid.x.length() / (width as f64 - 1.0));
+        let y_b = cr(grid.y.min);
+        let y_m = cr(grid.y.length() / (height as f64 - 1.0));
+
+        let mut state = Vec::with_capacity(width * height);
+        let mut cy = y_b;
+        for _ in 0..height {
+            let mut cx = x_b;
+            for _ in 0..width {
+                let c = cx + cy;
+                state.push(MbVecCell { c, z: c, i: -1 });
+                cx += x_m;
+            }
+            cy += y_m;
+        }
+
+        Self {
+            width,
+            height,
+            state,
+            iteration: 0,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct MbState {
     width: usize,
     height: usize,

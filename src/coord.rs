@@ -55,3 +55,9 @@ impl Viewport {
         self.y.max = yc + (self.y.max - yc) * factor;
     }
 }
+
+impl Default for Viewport {
+    fn default() -> Self {
+        Self::new(Axis::new(-2.0, 1.0), Axis::new(-1.0, 1.0))
+    }
+}

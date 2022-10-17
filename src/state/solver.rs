@@ -5,10 +5,58 @@ use std::thread;
 
 use ndarray::{Array2, Zip};
 
-use super::MbState;
+use super::{MbState, MbVecCell, MbVecState};
 
 pub trait MbSolver {
     fn solve(&self, state: &MbState) -> MbState;
+}
+
+pub struct VecIterSolver {
+    iterations: u16,
+    treshold: f64,
+}
+
+impl VecIterSolver {
+    fn iterate(&self, state: &MbVecState) -> MbVecState {
+        let mut new_state: Vec<MbVecCell> = Vec::with_capacity(state.width * state.height);
+        let iteration = state.iteration + 1;
+
+        for cell in &state.state {
+            let c = cell.c;
+            let z = (cell.z * cell.z) + cell.c;
+            let i = if (cell.i == -1) && (z.norm() > self.treshold) {
+                iteration
+            } else {
+                cell.i
+            };
+
+            new_state.push(MbVecCell { c, z, i })
+        }
+
+        MbVecState {
+            width: state.width,
+            height: state.height,
+            iteration,
+            state: new_state,
+        }
+    }
+
+    pub fn solve(&self, state: &MbVecState) -> MbVecState {
+        let mut state = state.clone();
+        for _ in 0..self.iterations {
+            state = self.iterate(&state);
+        }
+        state
+    }
+}
+
+impl Default for VecIterSolver {
+    fn default() -> Self {
+        Self {
+            iterations: 100,
+            treshold: 2.0,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -136,6 +184,18 @@ impl MultiSolver {
     {
         let worker = MbWorker::new(solver, self.tx.clone());
         self.workers.push(worker);
+    }
+
+    pub fn with_solvers<F, T>(n: usize, f: F) -> Self
+    where
+        T: MbSolver + Send + 'static,
+        F: Fn() -> T,
+    {
+        let mut this = Self::new();
+        for _ in 0..n {
+            this.add_solver(f());
+        }
+        this
     }
 
     pub fn add_default_solvers<T>(&mut self, n: usize)

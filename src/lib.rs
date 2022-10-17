@@ -1,3 +1,4 @@
+pub mod bench;
 mod complex;
 pub mod coord;
 pub mod painter;
