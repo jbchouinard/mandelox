@@ -10,7 +10,7 @@ use druid::{
 use mandelox::coord::{Axis, Viewport};
 use mandelox::painter::{convert_image, Painter as MandeloxPainter, RainbowPainter};
 use mandelox::updater::Updater;
-use mandelox::{IterSolver, MbState, ThreadedMbSolver};
+use mandelox::{MbSolver, MbState, MultiSolver};
 
 const DEFAULT_VIEWPORT: Viewport = Viewport {
     x: Axis {
@@ -35,7 +35,7 @@ impl MbViewerState {
         Self {
             width: Arc::new(AtomicUsize::new(width)),
             height: Arc::new(AtomicUsize::new(height)),
-            state: state,
+            state,
         }
     }
 
@@ -68,13 +68,7 @@ struct ViewerState {
     viewer_state: MbViewerState,
 }
 
-pub struct MbUpdater {}
-
-impl MbUpdater {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
+pub struct MbUpdater;
 
 impl Updater<Viewport, MbViewerState> for MbUpdater {
     fn update(&mut self, old_a: &Viewport, old_b: &MbViewerState) -> MbViewerState {
@@ -84,8 +78,8 @@ impl Updater<Viewport, MbViewerState> for MbUpdater {
             old_b.clone()
         } else {
             let initial = MbState::initialize(width, height, old_a);
-            let solver = ThreadedMbSolver::new(2.0, 4);
-            let solved = solver.iterate_n(&initial, 100);
+            let solver = MultiSolver::default();
+            let solved = solver.solve(&initial);
             MbViewerState::new(width, height, Some(solved))
         }
     }
@@ -208,7 +202,7 @@ fn build_ui() -> impl Widget<ViewerState> {
     //     .lens(ViewerState::viewport)
     //     .fix_size(1200.0, 960.0);
 
-    let mandelbrot_widget = MbUpdater::new()
+    let mandelbrot_widget = MbUpdater
         .async_wrapper()
         .controller(
             build_mb_painter(),
