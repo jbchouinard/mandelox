@@ -93,13 +93,11 @@ impl MbWorker {
     {
         let (tx, rx) = mpsc::channel::<MbStateSegment>();
         thread::spawn(move || loop {
-            println!("recv problem");
             let recv_segment = match rx.recv() {
                 Ok(segment) => segment,
                 Err(_) => return,
             };
             let soln = solver.solve(&recv_segment.state);
-            println!("send soln");
             sol_tx
                 .send(MbStateSegment {
                     n: recv_segment.n,
@@ -112,7 +110,6 @@ impl MbWorker {
     }
 
     fn send(&self, segment: MbStateSegment) {
-        println!("send problem");
         self.tx.send(segment).unwrap();
     }
 }
@@ -195,7 +192,6 @@ impl MbSolver for MultiSolver {
 
         let mut soln_segments: Vec<Option<MbState>> = vec![None; sn];
         for _ in 0..sn {
-            println!("recv soln");
             let segment = self.rx.recv().unwrap();
             soln_segments[segment.n] = Some(segment.state);
         }
