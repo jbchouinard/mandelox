@@ -38,7 +38,7 @@ impl MbVecSolver {
 }
 
 impl Solver<MbVecState> for MbVecSolver {
-    fn solve(&self, state: &MbVecState) -> MbVecState {
+    fn solve(&self, state: MbVecState) -> MbVecState {
         let mut state = state.clone();
         for _ in 0..self.iterations {
             state = self.iterate(&state);
@@ -106,7 +106,7 @@ impl Default for MbArraySolver {
 }
 
 impl Solver<MbArrayState> for MbArraySolver {
-    fn solve(&self, state: &MbArrayState) -> MbArrayState {
+    fn solve(&self, state: MbArrayState) -> MbArrayState {
         let mut state = state.clone();
         for _ in 0..self.iterations {
             state = self.iterate(&state);

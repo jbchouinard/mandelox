@@ -10,8 +10,8 @@ use druid::{
 use mandelox::coord::{Axis, Viewport};
 use mandelox::painter::{convert_image, Painter as MandeloxPainter, RainbowPainter};
 use mandelox::state::solver::MbArraySolver;
-use mandelox::state::MbArrayState;
-use mandelox::threads::Solver;
+use mandelox::state::{MbArrayState, MbState};
+use mandelox::threads::{DefaultThreaded, Solver};
 use mandelox::updater::Updater;
 
 const DEFAULT_VIEWPORT: Viewport = Viewport {
@@ -80,8 +80,8 @@ impl Updater<Viewport, MbViewerState> for MbUpdater {
             old_b.clone()
         } else {
             let initial = MbArrayState::initialize(width, height, old_a);
-            let solver = MbArraySolver::default();
-            let solved = solver.solve(&initial);
+            let solver = MbArraySolver::threaded(8);
+            let solved = solver.solve(initial);
             MbViewerState::new(width, height, Some(solved))
         }
     }

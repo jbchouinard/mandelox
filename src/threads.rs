@@ -3,11 +3,11 @@ use std::sync::mpsc;
 use std::thread;
 
 pub trait Split: Sized + Clone {
-    fn split_parts(&self, n: usize) -> Vec<Self>;
+    fn split_parts(self, n: usize) -> Vec<Self>;
 
-    fn join_parts(&self, parts: &[Self]) -> Self;
+    fn join_parts(parts: Vec<Self>) -> Self;
 
-    fn parts(&self, n: usize) -> Vec<SplitPart<Self>> {
+    fn parts(self, n: usize) -> Vec<SplitPart<Self>> {
         self.split_parts(n)
             .into_iter()
             .enumerate()
@@ -20,7 +20,7 @@ impl<T> Split for Vec<T>
 where
     T: Clone,
 {
-    fn split_parts(&self, n: usize) -> Vec<Self> {
+    fn split_parts(self, n: usize) -> Vec<Self> {
         let size = self.len() / n;
         let size_xtra = self.len() % n;
 
@@ -37,10 +37,10 @@ where
         }
         parts
     }
-    fn join_parts(&self, parts: &[Self]) -> Self {
-        let mut v: Vec<T> = self.clone();
+    fn join_parts(parts: Vec<Self>) -> Self {
+        let mut v: Vec<T> = vec![];
         for p in parts {
-            v.extend_from_slice(p);
+            v.extend(p);
         }
         v
     }
@@ -63,7 +63,7 @@ where
         Self { part, n }
     }
 
-    pub fn join(splits: &[SplitPart<T>]) -> Result<T, JoinError> {
+    pub fn join(splits: Vec<SplitPart<T>>) -> Result<T, JoinError> {
         let n = splits.len();
         if n == 0 {
             return Err(JoinError);
@@ -80,12 +80,12 @@ where
         }
         // By pigeonhole principle, no elements can be None
         let parts: Vec<T> = parts.into_iter().map(|x| x.unwrap()).collect();
-        Ok(parts[0].join_parts(&parts[1..]))
+        Ok(T::join_parts(parts))
     }
 }
 
 pub trait Solver<T> {
-    fn solve(&self, state: &T) -> T;
+    fn solve(&self, state: T) -> T;
 }
 
 pub trait Threaded<T>
@@ -156,7 +156,7 @@ where
                 Ok(s) => s,
                 Err(_) => return,
             };
-            let soln = solver.solve(&splitted.part);
+            let soln = solver.solve(splitted.part);
             sol_tx.send(SplitPart::new(soln, splitted.n)).unwrap();
         });
 
@@ -251,7 +251,7 @@ impl<T> Solver<T> for ThreadedSolver<T>
 where
     T: Split,
 {
-    fn solve(&self, state: &T) -> T {
+    fn solve(&self, state: T) -> T {
         let sn = self.workers.len();
         assert!(sn > 0, "no workers");
 
@@ -262,25 +262,29 @@ where
         for _ in 0..sn {
             parts.push(self.rx.recv().unwrap());
         }
-        SplitPart::join(&parts).unwrap()
+        SplitPart::join(parts).unwrap()
     }
 }
 
 #[cfg(test)]
-fn test_vec_split(length: usize, n: usize) {
-    let v: Vec<usize> = (0..length).collect();
-    let vs = v.parts(n);
-    assert_eq!(vs.len(), n);
-    let vj: Vec<usize> = SplitPart::join(&vs).unwrap();
-    assert_eq!(v, vj);
-}
+mod test {
+    use super::*;
 
-#[test]
-fn test_vec_splits() {
-    test_vec_split(1, 1);
-    test_vec_split(0, 2);
-    test_vec_split(5, 8);
-    test_vec_split(8, 5);
-    test_vec_split(100, 1);
-    test_vec_split(55, 47);
+    fn test_vec_split(length: usize, n: usize) {
+        let v: Vec<usize> = (0..length).collect();
+        let vs = v.clone().parts(n);
+        assert_eq!(vs.len(), n);
+        let vj: Vec<usize> = SplitPart::join(vs).unwrap();
+        assert_eq!(v, vj);
+    }
+
+    #[test]
+    fn test_vec_splits() {
+        test_vec_split(1, 1);
+        test_vec_split(0, 2);
+        test_vec_split(5, 8);
+        test_vec_split(8, 5);
+        test_vec_split(100, 1);
+        test_vec_split(55, 47);
+    }
 }

@@ -8,5 +8,12 @@
 	"settings":
 	{
 		"rust_syntax_checking": true,
+		"LSP":
+		{
+			"rust-analyzer":
+			{
+				"enabled": true,
+			},
+		},
 	},
 }

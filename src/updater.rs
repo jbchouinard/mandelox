@@ -162,7 +162,6 @@ where
                 return;
             }
             let (old_a, old_b) = ab_rx.recv().unwrap();
-            println!("updateing");
             let updated_b = updater.update(&old_a, &old_b);
             b_tx.send(updated_b).unwrap();
         });
@@ -259,7 +258,6 @@ where
 {
     fn event(&mut self, ctx: &mut EventCtx, _event: &Event, data: &mut T, _env: &Env) {
         if let Some(updated_data_b) = self.updater.maybe_receive() {
-            println!("received update");
             self.lens_b
                 .with_mut(data, |data_b| *data_b = updated_data_b);
             ctx.request_paint();
@@ -273,7 +271,6 @@ where
         let new_data_a: A = self.lens_a.with(new_data, |new_data_a| new_data_a.clone());
 
         if !old_data_a.same(&new_data_a) {
-            println!("sending update");
             // TODO: set timer to try receiving
             self.lens_b.with(new_data, |new_data_b| {
                 self.updater.send(new_data_a, new_data_b.clone());

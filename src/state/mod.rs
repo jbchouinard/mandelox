@@ -7,6 +7,8 @@ use crate::complex::{ci, cr, C};
 use crate::coord::Viewport;
 use crate::threads::Split;
 
+pub mod cell;
+pub mod shared;
 pub mod solver;
 
 fn generate_complex_grid(width: usize, height: usize, grid: &Viewport) -> Array2<C<f64>> {
@@ -83,14 +85,14 @@ impl MbState for MbVecState {
 }
 
 impl Split for MbVecState {
-    fn split_parts(&self, n: usize) -> Vec<Self> {
+    fn split_parts(self, n: usize) -> Vec<Self> {
         let rows = self.state.split_parts(self.height);
         let row_groups = rows.split_parts(n);
 
         let mut parts = vec![];
         for row_group in row_groups {
             let height = row_group.len();
-            let state = row_group[0].join_parts(&row_group[1..]);
+            let state = Vec::<MbVecCell>::join_parts(row_group);
             parts.push(Self {
                 width: self.width,
                 height,
@@ -100,7 +102,7 @@ impl Split for MbVecState {
         }
         parts
     }
-    fn join_parts(&self, parts: &[Self]) -> Self {
+    fn join_parts(parts: Vec<Self>) -> Self {
         let mut height = 0;
         let width = parts[0].width;
         let iteration = parts[0].iteration;
@@ -115,7 +117,7 @@ impl Split for MbVecState {
             width,
             height,
             iteration,
-            state: state_parts[0].join_parts(&state_parts[1..]),
+            state: Vec::join_parts(state_parts),
         }
     }
 }
@@ -169,7 +171,7 @@ impl MbArrayState {
 }
 
 impl Split for MbArrayState {
-    fn split_parts(&self, n: usize) -> Vec<Self> {
+    fn split_parts(self, n: usize) -> Vec<Self> {
         let h = self.height / n;
         let h_xtra = self.height % n;
 
@@ -195,32 +197,34 @@ impl Split for MbArrayState {
         split
     }
 
-    fn join_parts(&self, states: &[MbArrayState]) -> Self {
-        let mut height = self.height;
-        let mut cas = vec![self.ca.as_ref().view()];
-        let mut zas = vec![self.za.as_ref().view()];
-        let mut ias = vec![self.ia.as_ref().view()];
+    fn join_parts(states: Vec<MbArrayState>) -> Self {
+        let width = states[0].width;
+        let iteration = states[0].iteration;
+        let mut height = 0;
+        let mut cas = vec![];
+        let mut zas = vec![];
+        let mut ias = vec![];
 
-        for other in states {
-            if self.width != other.width {
+        for state in &states {
+            if width != state.width {
                 panic!("different width");
             }
-            if self.iteration != other.iteration {
+            if iteration != state.iteration {
                 panic!("different iteration");
             }
-            height += other.height;
-            cas.push(other.ca.as_ref().view());
-            zas.push(other.za.as_ref().view());
-            ias.push(other.ia.as_ref().view());
+            height += state.height;
+            cas.push(state.ca.as_ref().view());
+            zas.push(state.za.as_ref().view());
+            ias.push(state.ia.as_ref().view());
         }
 
         let ca = concatenate(Axis(0), &cas).unwrap();
         let za = concatenate(Axis(0), &zas).unwrap();
         let ia = concatenate(Axis(0), &ias).unwrap();
         MbArrayState {
-            width: self.width,
+            width,
             height,
-            iteration: self.iteration,
+            iteration,
             ca: Arc::new(ca),
             za: Arc::new(za),
             ia: Arc::new(ia),

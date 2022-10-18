@@ -1,6 +1,6 @@
 use mandelox::bench::{Benchmark as B, BenchmarkReport};
 use mandelox::coord::Viewport;
-use mandelox::state::{MbArrayState, MbVecState};
+use mandelox::state::{MbArrayState, MbState, MbVecState};
 
 fn b_mbstate_init(height: usize) -> B {
     let width: usize = 3 * height / 2;

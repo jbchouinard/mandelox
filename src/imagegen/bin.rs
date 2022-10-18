@@ -1,6 +1,6 @@
 use mandelox::coord::{Axis, Viewport};
 use mandelox::painter::{Painter, RainbowPainter};
-use mandelox::state::{solver::MbArraySolver, MbArrayState};
+use mandelox::state::{solver::MbArraySolver, MbArrayState, MbState};
 use mandelox::threads::Solver;
 
 fn main() {
@@ -10,7 +10,7 @@ fn main() {
 
     let solver = MbArraySolver::default();
     let initial = MbArrayState::initialize(width, height, &scale);
-    let solved = solver.solve(&initial);
+    let solved = solver.solve(initial);
     let painter = RainbowPainter::new(10.0);
     let img = painter.paint(solved.i_values());
     img.save("out.png").expect("failed to save image");
