@@ -9,8 +9,10 @@ use druid::{
 
 use mandelox::coord::{Axis, Viewport};
 use mandelox::painter::{convert_image, Painter as MandeloxPainter, RainbowPainter};
+use mandelox::state::solver::MbArraySolver;
+use mandelox::state::MbArrayState;
+use mandelox::threads::Solver;
 use mandelox::updater::Updater;
-use mandelox::{MbSolver, MbState, MultiSolver};
 
 const DEFAULT_VIEWPORT: Viewport = Viewport {
     x: Axis {
@@ -27,11 +29,11 @@ const DEFAULT_VIEWPORT: Viewport = Viewport {
 struct MbViewerState {
     width: Arc<AtomicUsize>,
     height: Arc<AtomicUsize>,
-    state: Option<MbState>,
+    state: Option<MbArrayState>,
 }
 
 impl MbViewerState {
-    pub fn new(width: usize, height: usize, state: Option<MbState>) -> Self {
+    pub fn new(width: usize, height: usize, state: Option<MbArrayState>) -> Self {
         Self {
             width: Arc::new(AtomicUsize::new(width)),
             height: Arc::new(AtomicUsize::new(height)),
@@ -77,8 +79,8 @@ impl Updater<Viewport, MbViewerState> for MbUpdater {
         if width == 0 || height == 0 {
             old_b.clone()
         } else {
-            let initial = MbState::initialize(width, height, old_a);
-            let solver = MultiSolver::default();
+            let initial = MbArrayState::initialize(width, height, old_a);
+            let solver = MbArraySolver::default();
             let solved = solver.solve(&initial);
             MbViewerState::new(width, height, Some(solved))
         }

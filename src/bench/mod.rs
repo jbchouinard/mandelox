@@ -69,14 +69,14 @@ impl BenchmarkReport {
             print!(".");
             stdout().flush().unwrap();
         }
-        print!("\n\n");
+        println!();
         stdout().flush().unwrap();
     }
 
     pub fn show(&self) {
         for (name, iterations, t) in &self.results {
             println!(
-                "{}\n  per call: {}μs\n  total: {}ms\n",
+                "  {}\n    per call: {}μs\n    total: {}ms\n",
                 name,
                 t.as_micros() / *iterations as u128,
                 t.as_millis()
@@ -98,5 +98,12 @@ impl BenchmarkReport {
         }
         lines.push("".to_string());
         fs::write(filename, lines.join("\n")).unwrap();
+    }
+
+    pub fn report(&mut self, name: &str) {
+        print!("Benchmark: {}", name);
+        self.run();
+        self.show();
+        self.write_csv(&format!("benchmark_{}.csv", name))
     }
 }

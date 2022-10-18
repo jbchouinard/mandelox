@@ -1,68 +1,79 @@
 use mandelox::bench::{Benchmark as B, BenchmarkReport};
 use mandelox::coord::Viewport;
-use mandelox::state::solver::{IterSolver, MbSolver, VecIterSolver};
-use mandelox::state::{MbState, MbVecState};
+use mandelox::state::solver::MbArraySolver;
+use mandelox::state::MbState;
+use mandelox::threads::{DefaultThreaded, Solver, ThreadedSolver};
 
-fn b_mbstate_init(height: usize) -> B {
+static HEIGHT: usize = 2000;
+static REPEATS: usize = 10;
+
+fn b_solver<S, T>(name: &str, solver: S, height: usize) -> B
+where
+    T: MbState + 'static,
+    S: Solver<T> + 'static,
+{
     let width: usize = 3 * height / 2;
     let grid = Viewport::default();
-
-    let f = move || {
-        MbState::initialize(width, height, &grid);
-    };
-    B::iter(&format!("ndarray-init-{}", height), 100, f)
-}
-
-fn b_mbvecstate_init(height: usize) -> B {
-    let width: usize = 3 * height / 2;
-    let grid = Viewport::default();
-
-    let f = move || {
-        MbVecState::initialize(width, height, &grid);
-    };
-    B::iter(&format!("vec-init-{}", height), 100, f)
-}
-
-fn b_itersolve_1t(height: usize) -> B {
-    let width: usize = 3 * height / 2;
-    let solver = IterSolver::default();
-    let grid = Viewport::default();
-    let initial = MbState::initialize(width, height, &grid);
-
+    let initial = T::initialize(width, height, &grid);
     let f = move || {
         solver.solve(&initial);
     };
-    B::iter(&format!("ndarray-solve-1t-{}", height), 3, f)
-}
-
-fn b_vecitersolve_1t(height: usize) -> B {
-    let width: usize = 3 * height / 2;
-    let solver = VecIterSolver::default();
-    let grid = Viewport::default();
-    let initial = MbVecState::initialize(width, height, &grid);
-
-    let f = move || {
-        solver.solve(&initial);
-    };
-    B::iter(&format!("vec-solve-1t-{}", height), 3, f)
+    B::iter(&format!("solver-{}-{}", name, height), REPEATS, f)
 }
 
 fn main() {
-    let mut report = BenchmarkReport::with_benches(&[
-        b_mbstate_init(500),
-        b_mbvecstate_init(500),
-        b_mbstate_init(1000),
-        b_mbvecstate_init(1000),
-        b_mbstate_init(2000),
-        b_mbvecstate_init(2000),
-        b_itersolve_1t(500),
-        b_vecitersolve_1t(500),
-        b_itersolve_1t(1000),
-        b_vecitersolve_1t(1000),
-        b_itersolve_1t(2000),
-        b_vecitersolve_1t(2000),
-    ]);
-    report.run();
-    report.show();
-    report.write_csv("benchmark_solver.csv");
+    BenchmarkReport::with_benches(&[
+        b_solver("arr-st", MbArraySolver::default(), HEIGHT),
+        b_solver("arr-mt2", MbArraySolver::threaded(2), HEIGHT),
+        b_solver("arr-mt4", MbArraySolver::threaded(4), HEIGHT),
+        b_solver(
+            "arr-mt2x2",
+            ThreadedSolver::with_solvers(2, || MbArraySolver::threaded(2)),
+            HEIGHT,
+        ),
+        b_solver("arr-mt8", MbArraySolver::threaded(8), HEIGHT),
+        b_solver(
+            "arr-mt2x4",
+            ThreadedSolver::with_solvers(2, || MbArraySolver::threaded(4)),
+            HEIGHT,
+        ),
+        b_solver(
+            "arr-mt4x2",
+            ThreadedSolver::with_solvers(4, || MbArraySolver::threaded(2)),
+            HEIGHT,
+        ),
+        b_solver(
+            "arr-mt2x2x2",
+            ThreadedSolver::with_solvers(2, || {
+                ThreadedSolver::with_solvers(2, || MbArraySolver::threaded(2))
+            }),
+            HEIGHT,
+        ),
+        b_solver("arr-mt16", MbArraySolver::threaded(16), HEIGHT),
+        b_solver(
+            "arr-mt4x4",
+            ThreadedSolver::with_solvers(4, || MbArraySolver::threaded(4)),
+            HEIGHT,
+        ),
+        b_solver(
+            "arr-mt2x8",
+            ThreadedSolver::with_solvers(2, || MbArraySolver::threaded(8)),
+            HEIGHT,
+        ),
+        b_solver(
+            "arr-mt8x2",
+            ThreadedSolver::with_solvers(8, || MbArraySolver::threaded(2)),
+            HEIGHT,
+        ),
+        b_solver(
+            "arr-mt2x2x2x2",
+            ThreadedSolver::with_solvers(2, || {
+                ThreadedSolver::with_solvers(2, || {
+                    ThreadedSolver::with_solvers(2, || MbArraySolver::threaded(2))
+                })
+            }),
+            HEIGHT,
+        ),
+    ])
+    .report("solver");
 }

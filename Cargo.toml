@@ -20,6 +20,10 @@ path = "src/viewer/bin.rs"
 name = "bench-solver"
 path = "src/bench/solver.rs"
 
+[[bin]]
+name = "bench-stateinit"
+path = "src/bench/stateinit.rs"
+
 # [profile.release]
 # debug = true
 
