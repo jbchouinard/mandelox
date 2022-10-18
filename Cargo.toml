@@ -32,3 +32,5 @@ druid = { git = "https://github.com/linebender/druid.git" }
 image = "0.24.4"
 ndarray = "0.15.6"
 num = "0.4.0"
+num_cpus = "1.13.1"
+

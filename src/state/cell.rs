@@ -1,134 +1,126 @@
-// use std::cell::Cell;
-// use std::sync::atomic::AtomicBool;
-// use std::sync::{Arc, Mutex};
+use std::iter::zip;
 
-// use crate::complex::{ci, cr, C};
-// use crate::coord::Viewport;
-// use crate::state::MbState;
-// use crate::threads::{Solver, Split};
+use crate::complex::{ci, cr, C};
+use crate::coord::Viewport;
+use crate::state::shared::{SArray, SArrayLen, SArraySplit};
+use crate::state::MbState;
+use crate::threads::{Solver, Split};
 
-// pub const MB_CELL_STATE_HEIGHT: usize = 1500;
-// pub const MB_CELL_STATE_WIDTH: usize = 1000;
-// const ARRAY_L: usize = MB_CELL_STATE_HEIGHT * MB_CELL_STATE_WIDTH;
+pub const MB_CELL_STATE_WIDTH: usize = 75;
+pub const MB_CELL_STATE_HEIGHT: usize = 50;
+const ARRAY_L: usize = MB_CELL_STATE_HEIGHT * MB_CELL_STATE_WIDTH;
 
-// type CArray = [Cell<C<f64>>; ARRAY_L];
-// type IArray = [Cell<i16>; ARRAY_L];
+pub type CArray = SArray<C<f64>, ARRAY_L>;
+pub type IArray = SArray<i16, ARRAY_L>;
 
-// pub struct MbCellState {
-//     iteration: i16,
-//     c: CArray,
-//     z: CArray,
-//     i: IArray,
-// }
+pub struct MbCellState {
+    iteration: i16,
+    c: CArray,
+    z: CArray,
+    i: IArray,
+}
 
-// #[derive(Clone)]
-// pub struct MbCellStateRef(Arc<MbCellStateShared>);
+impl Split for MbCellState {
+    fn split_parts(self, n: usize) -> Vec<Self> {
+        let Self { iteration, c, z, i } = self;
+        zip(zip(c.split(n), z.split(n)), i.split(n))
+            .map(|((c, z), i)| Self { iteration, c, z, i })
+            .collect()
+    }
+    fn join_parts(parts: Vec<Self>) -> Self {
+        let iteration = parts[0].iteration;
+        let (czs, is): (Vec<(CArray, CArray)>, Vec<IArray>) = parts
+            .into_iter()
+            .map(|cell| {
+                let Self { c, z, i, .. } = cell;
+                ((c, z), i)
+            })
+            .unzip();
+        let (cs, zs): (Vec<CArray>, Vec<CArray>) = czs.into_iter().unzip();
+        let c = SArray::join(cs);
+        let z = SArray::join(zs);
+        let i = SArray::join(is);
+        Self { iteration, c, z, i }
+    }
+}
 
-// impl MbCellStateRef {
-//     pub fn slice(&self, row_start: usize, row_end: usize) -> Self {
-//         Self(Arc::new(MbCellStateShared {
-//             lock: Arc::new(Mutex::new(())),
-//             row_start,
-//             row_end,
-//             parent: Some(self.clone()),
-//             state: self.0.state.clone(),
-//         }))
-//     }
-// }
+impl MbState for MbCellState {
+    fn initialize(width: usize, height: usize, grid: &Viewport) -> Self {
+        assert!(width == MB_CELL_STATE_WIDTH, "wrong width");
+        assert!(height == MB_CELL_STATE_HEIGHT, "wrong height");
+        let x_b = cr(grid.x.min);
+        let x_m = cr(grid.x.length() / (width as f64 - 1.0));
+        let y_b = cr(grid.y.min);
+        let y_m = cr(grid.y.length() / (height as f64 - 1.0));
 
-// #[derive(Clone)]
-// pub struct MbCellStateShared {
-//     parent: Option<MbCellStateRef>,
-//     lock: Arc<AtomicBool>,
-//     state: Arc<MbCellState>,
-//     row_start: usize,
-//     row_end: usize,
-// }
+        let mut c = CArray::default();
+        let mut z = CArray::default();
+        let i = IArray::full(-1);
 
-// impl Split for MbCellStateRef {
-//     fn split_parts(self, n: usize) -> Vec<Self> {
-//         assert!(n > 0);
-//         self.0.lock.lock().unwrap();
+        for y in 0..MB_CELL_STATE_HEIGHT {
+            for x in 0..MB_CELL_STATE_WIDTH {
+                let j = (y * width) + x;
+                let cx = x_b + x_m * x as f64;
+                let cy = y_b + y_m * y as f64;
+                let cc = cx + cy * ci(1.0);
+                c.set(j, cc);
+                z.set(j, cc);
+            }
+        }
 
-//         let len = self.0.row_end - self.0.row_start;
-//         let size = len / n;
-//         let size_xtra = len % n;
+        Self {
+            iteration: 0,
+            c,
+            z,
+            i,
+        }
+    }
+    fn height(&self) -> usize {
+        MB_CELL_STATE_HEIGHT
+    }
+    fn width(&self) -> usize {
+        MB_CELL_STATE_WIDTH
+    }
+    fn i_value(&self, x: usize, y: usize) -> i16 {
+        self.i.get(y * MB_CELL_STATE_WIDTH + x)
+    }
+}
 
-//         let mut start = self.0.row_start;
-//         let mut end = start + size;
-//         let mut parts: Vec<Self> = vec![];
-//         for i in 0..n {
-//             if i < size_xtra {
-//                 end += 1
-//             }
-//             parts.push(self.slice(start, end));
-//             start = end;
-//             end += size;
-//         }
-//         parts
-//     }
-//     fn join_parts(parts: Vec<Self>) -> Self {
-//         let parent = parts[0]
-//             .0
-//             .parent
-//             .as_ref()
-//             .expect("cannot join non-split!")
-//             .clone();
+pub struct MbCellSolver {
+    iterations: i16,
+    treshold: f64,
+}
 
-//         parent
-//     }
-// }
+impl Default for MbCellSolver {
+    fn default() -> Self {
+        Self {
+            iterations: 100,
+            treshold: 2.0,
+        }
+    }
+}
 
-// pub struct MbCellSolver {
-//     treshold: f64,
-// }
+impl MbCellSolver {
+    fn iterate(&self, state: &mut MbCellState) {
+        state.iteration += 1;
+        for j in 0..state.c.len() {
+            let c = state.c.get(j);
+            let z = state.z.get(j);
+            let i = state.i.get(j);
+            let z = (z * z) + c;
+            state.z.set(j, z);
+            if (i == -1) && (z.norm() > self.treshold) {
+                state.i.set(j, state.iteration);
+            }
+        }
+    }
+}
 
-// impl Default for MbCellSolver {
-//     fn default() -> Self {
-//         Self { treshold: 2.0 }
-//     }
-// }
-
-// impl MbState for MbCellStateShared {
-//     fn initialize(width: usize, height: usize, grid: &Viewport) -> Self {
-//         assert!(width == MB_CELL_STATE_WIDTH, "wrong width");
-//         assert!(height == MB_CELL_STATE_HEIGHT, "wrong height");
-//         let x_b = cr(grid.x.min);
-//         let x_m = cr(grid.x.length() / (width as f64 - 1.0));
-//         let y_b = cr(grid.y.min);
-//         let y_m = cr(grid.y.length() / (height as f64 - 1.0));
-
-//         let c: CArray = [(); ARRAY_L].map(|_| Cell::new(cr(0.0)));
-//         let z: CArray = [(); ARRAY_L].map(|_| Cell::new(cr(0.0)));
-//         let i: IArray = [(); ARRAY_L].map(|_| Cell::new(-1));
-
-//         for y in 0..MB_CELL_STATE_HEIGHT {
-//             for x in 0..MB_CELL_STATE_WIDTH {
-//                 let cx = x_b + x_m * x as f64;
-//                 let cy = y_b + y_m * y as f64;
-//                 let cc = cx + cy * ci(1.0);
-//                 c[x * y].set(cc);
-//                 z[x * y].set(cc);
-//             }
-//         }
-
-//         Self {
-//             parent: None,
-//             lock: Arc::new(Mutex::new(())),
-//             row_start: 0,
-//             row_end: MB_CELL_STATE_HEIGHT,
-//             state: Arc::new(MbCellState {
-//                 iteration: 0,
-//                 c,
-//                 z,
-//                 i,
-//             }),
-//         }
-//     }
-// }
-
-// impl Solver<MbCellState> for MbCellSolver {
-//     fn solve(&self, _: MbCellState) -> MbCellState {
-//         todo!()
-//     }
-// }
+impl Solver<MbCellState> for MbCellSolver {
+    fn solve(&self, mut state: MbCellState) -> MbCellState {
+        for _ in 0..self.iterations {
+            self.iterate(&mut state);
+        }
+        state
+    }
+}

@@ -3,60 +3,80 @@ use std::sync::Arc;
 use druid::piet::ImageFormat;
 use druid::ImageBuf;
 use image::{Rgb, RgbImage};
-use ndarray::Array2;
 
-pub trait Painter {
-    fn i_value_color(&self, i_value: i16) -> Rgb<u8>;
+use crate::state::MbState;
 
-    fn paint(&self, i_values: &Array2<i16>) -> RgbImage {
-        let width: u32 = i_values.ncols().try_into().unwrap();
-        let height: u32 = i_values.nrows().try_into().unwrap();
+pub trait Painter<T> {
+    fn paint(&self, t: &T) -> RgbImage;
+}
+
+pub trait ColorScale {
+    fn get_color(&self, frac: f64) -> Rgb<u8>;
+}
+
+pub trait IValueGetter<T> {
+    fn width(&self, t: &T) -> usize;
+    fn height(&self, t: &T) -> usize;
+    fn i_value(&self, t: &T, x: usize, y: usize) -> i16;
+}
+
+pub struct IValuePainter<C>
+where
+    C: ColorScale,
+{
+    max_i_value: i16,
+    color: C,
+}
+
+impl<C> IValuePainter<C>
+where
+    C: ColorScale,
+{
+    pub fn new(color: C, max_i_value: i16) -> Self {
+        Self { color, max_i_value }
+    }
+}
+
+impl<T, C> Painter<T> for IValuePainter<C>
+where
+    C: ColorScale,
+    T: MbState,
+{
+    fn paint(&self, t: &T) -> RgbImage {
+        let width: u32 = t.width().try_into().unwrap();
+        let height: u32 = t.height().try_into().unwrap();
 
         let mut img = RgbImage::new(width, height);
         for y in 0..height {
             for x in 0..width {
-                let i_value = i_values[[y as usize, x as usize]];
+                let i_value = t.i_value(x as usize, y as usize);
                 let color = if i_value == -1 {
                     Rgb([0, 0, 0])
                 } else {
-                    self.i_value_color(i_value)
+                    let frac = i_value as f64 / self.max_i_value as f64;
+                    let frac = f64::clamp(frac, 0.0, 1.0);
+                    self.color.get_color(frac)
                 };
                 img.put_pixel(x, y, color);
             }
         }
+
         img
     }
 }
 
-pub struct GreyscalePainter {
-    max_i_value: f64,
-}
+pub struct Greyscale;
 
-impl GreyscalePainter {
-    pub fn new(max_i_value: f64) -> Self {
-        Self { max_i_value }
-    }
-}
-impl Painter for GreyscalePainter {
-    fn i_value_color(&self, i_value: i16) -> Rgb<u8> {
-        let frac: f64 = i_value as f64 / self.max_i_value;
-        let frac = frac.clamp(0.0, 1.0);
+impl ColorScale for Greyscale {
+    fn get_color(&self, frac: f64) -> Rgb<u8> {
         let v: u8 = 255 - (frac * 255.0).round() as u8;
         Rgb([v, v, v])
     }
 }
 
-pub struct RainbowPainter {
-    max_i_value: f64,
-}
+pub struct Rainbow;
 
-impl RainbowPainter {
-    pub fn new(max_i_value: f64) -> Self {
-        Self { max_i_value }
-    }
-}
-
-fn rainbow_color(n: i16) -> [u8; 3] {
+fn rainbow_color(n: usize) -> [u8; 3] {
     match n {
         0 => [0xbe, 0x0a, 0xff],
         1 => [0x58, 0x0a, 0xff],
@@ -78,15 +98,16 @@ fn mix(a: u8, b: u8, frac: f64) -> u8 {
     f64::round(m) as u8
 }
 
-impl Painter for RainbowPainter {
-    fn i_value_color(&self, i_value: i16) -> Rgb<u8> {
-        let n = (9 * i_value) / self.max_i_value as i16;
-        let frac = ((9.0 * i_value as f64) / self.max_i_value) - (n as f64);
+impl ColorScale for Rainbow {
+    fn get_color(&self, frac: f64) -> Rgb<u8> {
+        let n = 9.0 * frac;
+        let rem = n - (f64::floor(n));
+        let n = n as usize;
         let rgb1 = rainbow_color(n);
         let rgb2 = rainbow_color(n + 1);
-        let r = mix(rgb1[0], rgb2[0], frac);
-        let g = mix(rgb1[1], rgb2[1], frac);
-        let b = mix(rgb1[2], rgb2[2], frac);
+        let r = mix(rgb1[0], rgb2[0], rem);
+        let g = mix(rgb1[1], rgb2[1], rem);
+        let b = mix(rgb1[2], rgb2[2], rem);
         Rgb([r, g, b])
     }
 }

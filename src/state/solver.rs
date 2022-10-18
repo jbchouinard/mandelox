@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ndarray::{Array2, Zip};
 
-use super::{MbArrayState, MbVecCell, MbVecState};
+use super::{MbArrayState, MbState, MbVecState};
 use crate::threads::Solver;
 
 #[derive(Clone)]
@@ -12,36 +12,21 @@ pub struct MbVecSolver {
 }
 
 impl MbVecSolver {
-    fn iterate(&self, state: &MbVecState) -> MbVecState {
-        let mut new_state: Vec<MbVecCell> = Vec::with_capacity(state.width * state.height);
-        let iteration = state.iteration + 1;
-
-        for cell in &state.state {
-            let c = cell.c;
-            let z = (cell.z * cell.z) + cell.c;
-            let i = if (cell.i == -1) && (z.norm() > self.treshold) {
-                iteration
-            } else {
-                cell.i
-            };
-
-            new_state.push(MbVecCell { c, z, i })
-        }
-
-        MbVecState {
-            width: state.width,
-            height: state.height,
-            iteration,
-            state: new_state,
+    fn iterate(&self, state: &mut MbVecState) {
+        state.iteration += 1;
+        for cell in &mut state.state {
+            cell.z = (cell.z * cell.z) + cell.c;
+            if (cell.i == -1) && (cell.z.norm() > self.treshold) {
+                cell.i = state.iteration
+            }
         }
     }
 }
 
 impl Solver<MbVecState> for MbVecSolver {
-    fn solve(&self, state: MbVecState) -> MbVecState {
-        let mut state = state.clone();
+    fn solve(&self, mut state: MbVecState) -> MbVecState {
         for _ in 0..self.iterations {
-            state = self.iterate(&state);
+            self.iterate(&mut state);
         }
         state
     }
@@ -106,8 +91,7 @@ impl Default for MbArraySolver {
 }
 
 impl Solver<MbArrayState> for MbArraySolver {
-    fn solve(&self, state: MbArrayState) -> MbArrayState {
-        let mut state = state.clone();
+    fn solve(&self, mut state: MbArrayState) -> MbArrayState {
         for _ in 0..self.iterations {
             state = self.iterate(&state);
         }
