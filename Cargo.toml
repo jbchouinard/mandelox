@@ -1,8 +1,8 @@
 [package]
 name = "mandelox"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-default-run = "mandelox-viewer"
+default-run = "mandelox-gen"
 
 [lib]
 name = "mandelox"
@@ -38,4 +38,3 @@ image = "0.24.4"
 ndarray = "0.15.6"
 num = "0.4.0"
 num_cpus = "1.13.1"
-
