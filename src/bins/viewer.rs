@@ -10,9 +10,8 @@ use druid::{
 
 use mandelox::coord::Viewport;
 use mandelox::painter::{convert_image, IValuePainter, Painter as MandeloxPainter, Rainbow};
-use mandelox::state::solver::MbVecSolver;
-use mandelox::state::{MbState, MbVecState};
-use mandelox::threads::{DefaultThreaded, Solver};
+use mandelox::solver::{MbState, MbVecSolver, MbVecState, Solver};
+use mandelox::threads::Call;
 use mandelox::updater::{Refresher, Updater};
 
 const VIEWER_W: f64 = 1200.0;
@@ -21,7 +20,7 @@ const NAV_BUTTON_W: f64 = 40.0;
 const NAV_BUTTON_H: f64 = 40.0;
 
 fn default_viewport() -> Viewport {
-    let ratio = VIEWER_W as f64 / VIEWER_H as f64;
+    let ratio = VIEWER_W / VIEWER_H;
     Viewport::from_box(-0.5, 0.0, 3.0, 3.0 / ratio)
 }
 
@@ -74,8 +73,10 @@ impl Updater<Viewport, AppState> for MbUpdater {
             old_b.clone()
         } else {
             let initial = MbVecState::initialize(width, height, old_a);
-            let solver = MbVecSolver::threaded(num_cpus::get_physical());
-            let solved = solver.solve(initial);
+            let solver = MbVecSolver::default().threaded(num_cpus::get_physical());
+            let solved = solver.call(initial);
+            // let solver = MbVecSolver::default();
+            // let solved = solver.solve(initial);
             AppState::new(width, height, Some(solved), old_a.clone())
         }
     }
@@ -218,6 +219,7 @@ fn build_mandelbrot() -> impl Widget<AppState> {
         .controller(ViewportControl)
 }
 
+#[allow(dead_code)]
 fn build_ui_with_nav() -> impl Widget<AppState> {
     Flex::column()
         .with_child(

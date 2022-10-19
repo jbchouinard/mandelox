@@ -2,18 +2,59 @@ use std::iter::zip;
 use std::sync::mpsc;
 use std::thread;
 
+pub trait Call<T, U> {
+    fn call(&self, t: T) -> U;
+}
+
+impl<F, T, U> Call<T, U> for F
+where
+    F: Fn(T) -> U,
+{
+    fn call(&self, t: T) -> U {
+        self(t)
+    }
+}
+
+pub trait Threaded<T, U>
+where
+    T: Split,
+    U: Join,
+{
+    fn threadpool(&self, n: usize) -> WorkerPool<T, U>;
+}
+
+impl<C, T, U> Threaded<T, U> for C
+where
+    C: Call<T, U> + Clone + Send + 'static,
+    T: Split + Send + 'static,
+    U: Join + Send + 'static,
+{
+    fn threadpool(&self, n: usize) -> WorkerPool<T, U> {
+        WorkerPool::with_cloned(n, self)
+    }
+}
+
 pub trait Split: Sized {
-    fn split_parts(self, n: usize) -> Vec<Self>;
+    fn split_to_vec(self, n: usize) -> Vec<Self>;
 
-    fn join_parts(parts: Vec<Self>) -> Self;
-
-    fn parts(self, n: usize) -> Vec<SplitPart<Self>> {
-        self.split_parts(n)
+    fn to_parts(self, n: usize) -> Vec<SplitPart<Self>> {
+        self.split_to_vec(n)
             .into_iter()
             .enumerate()
             .map(|(n, part)| SplitPart::new(part, n))
             .collect()
     }
+}
+
+pub fn vectorize<F, T, U>(f: F) -> impl Call<Vec<T>, Vec<U>> + Send + Clone + 'static
+where
+    F: Call<T, U> + Send + Clone + 'static,
+{
+    move |vt: Vec<T>| vt.into_iter().map(|t| f.call(t)).collect()
+}
+
+pub trait Join: Sized {
+    fn join_vec(parts: Vec<Self>) -> Self;
 }
 
 pub struct RangeSplitter {
@@ -62,12 +103,15 @@ impl<T> Split for Vec<T>
 where
     T: Clone,
 {
-    fn split_parts(self, n: usize) -> Vec<Self> {
+    fn split_to_vec(self, n: usize) -> Vec<Self> {
         RangeSplitter::split(0, self.len(), n)
             .map(|(i, j)| self[i..j].to_vec())
             .collect()
     }
-    fn join_parts(parts: Vec<Self>) -> Self {
+}
+
+impl<T> Join for Vec<T> {
+    fn join_vec(parts: Vec<Self>) -> Self {
         let mut v: Vec<T> = vec![];
         for p in parts {
             v.extend(p);
@@ -80,19 +124,21 @@ where
 pub struct JoinError;
 
 #[derive(Debug)]
-pub struct SplitPart<T: Split> {
-    pub n: usize,
-    pub part: T,
+pub struct SplitPart<T> {
+    n: usize,
+    part: T,
+}
+
+impl<T> SplitPart<T> {
+    pub fn new(part: T, n: usize) -> Self {
+        Self { part, n }
+    }
 }
 
 impl<T> SplitPart<T>
 where
-    T: Split,
+    T: Join,
 {
-    pub fn new(part: T, n: usize) -> Self {
-        Self { part, n }
-    }
-
     pub fn join(splits: Vec<SplitPart<T>>) -> Result<T, JoinError> {
         let n = splits.len();
         if n == 0 {
@@ -110,108 +156,61 @@ where
         }
         // By pigeonhole principle, no element can be None
         let parts: Vec<T> = parts.into_iter().map(|x| x.unwrap()).collect();
-        Ok(T::join_parts(parts))
+        Ok(T::join_vec(parts))
     }
 }
 
-pub trait Solver<T> {
-    fn solve(&self, state: T) -> T;
-}
-
-pub trait Threaded<T>
-where
-    T: Split,
-{
-    fn threaded(&self, n: usize) -> ThreadedSolver<T>;
-}
-
-impl<S, T> Threaded<T> for S
-where
-    T: Split + Send + 'static,
-    S: Solver<T> + Send + 'static + Clone,
-{
-    fn threaded(&self, n: usize) -> ThreadedSolver<T> {
-        ThreadedSolver::with_cloned_solvers(n, self)
-    }
-}
-
-pub trait DefaultThreaded<T>
-where
-    T: Split,
-{
-    fn threaded(n: usize) -> ThreadedSolver<T>;
-}
-
-impl<S, T> DefaultThreaded<T> for S
-where
-    T: Split + Send + 'static,
-    S: Solver<T> + Send + 'static + Default,
-{
-    fn threaded(n: usize) -> ThreadedSolver<T> {
-        ThreadedSolver::with_default_solvers::<S>(n)
-    }
-}
-
-pub fn make_solver<S, T>(threads: usize) -> Box<dyn Solver<T>>
-where
-    T: Split + Send + 'static,
-    S: Solver<T> + Send + 'static + Clone + Default,
-{
-    if threads == 0 {
-        Box::<S>::default()
-    } else {
-        Box::new(S::default().threaded(threads))
-    }
-}
-
-struct Worker<T>
-where
-    T: Split,
-{
-    tx: mpsc::Sender<SplitPart<T>>,
+struct Worker<T> {
+    param_tx: mpsc::Sender<SplitPart<T>>,
 }
 
 impl<T> Worker<T>
 where
     T: Split,
 {
-    fn new<S>(solver: S, sol_tx: mpsc::Sender<SplitPart<T>>) -> Self
+    fn new<F, U>(f: F, return_tx: mpsc::Sender<SplitPart<U>>) -> Self
     where
-        S: Solver<T> + Send + 'static,
+        F: Call<T, U> + Send + 'static,
         T: Split + Send + 'static,
+        U: Join + Send + 'static,
     {
-        let (tx, rx) = mpsc::channel::<SplitPart<T>>();
+        let (param_tx, param_rx) = mpsc::channel::<SplitPart<T>>();
+
         thread::spawn(move || loop {
-            let splitted = match rx.recv() {
+            let splitted = match param_rx.recv() {
                 Ok(s) => s,
                 Err(_) => return,
             };
-            let soln = solver.solve(splitted.part);
-            sol_tx.send(SplitPart::new(soln, splitted.n)).unwrap();
+            let res = f.call(splitted.part);
+            if return_tx.send(SplitPart::new(res, splitted.n)).is_err() {
+                return;
+            }
         });
 
-        Self { tx }
+        Self { param_tx }
     }
 
     fn send(&self, part: SplitPart<T>) {
-        self.tx.send(part).unwrap();
+        self.param_tx.send(part).unwrap();
     }
 }
 
-pub struct ThreadedSolver<T>
+pub struct WorkerPool<T, U>
 where
     T: Split,
+    U: Join,
 {
     workers: Vec<Worker<T>>,
-    rx: mpsc::Receiver<SplitPart<T>>,
-    tx: mpsc::Sender<SplitPart<T>>,
+    tx: mpsc::Sender<SplitPart<U>>,
+    rx: mpsc::Receiver<SplitPart<U>>,
 }
 
-impl<T> ThreadedSolver<T>
+impl<T, U> WorkerPool<T, U>
 where
     T: Split + Send + 'static,
+    U: Join + Send + 'static,
 {
-    pub fn new() -> Self {
+    fn new() -> Self {
         let (tx, rx) = mpsc::channel();
         Self {
             workers: vec![],
@@ -220,75 +219,47 @@ where
         }
     }
 
-    pub fn add_solver<S>(&mut self, solver: S)
+    fn add_workers<F, G>(&mut self, n: usize, g: G)
     where
-        S: Solver<T> + Send + 'static,
-    {
-        let worker = Worker::new(solver, self.tx.clone());
-        self.workers.push(worker);
-    }
-
-    pub fn with_solvers<F, S>(n: usize, f: F) -> Self
-    where
-        S: Solver<T> + Send + 'static,
-        F: Fn() -> S,
-    {
-        let mut this = Self::new();
-        for _ in 0..n {
-            this.add_solver(f());
-        }
-        this
-    }
-
-    pub fn add_default_solvers<S>(&mut self, n: usize)
-    where
-        S: Solver<T> + Send + 'static + Default,
+        F: Call<T, U> + Send + 'static,
+        G: Fn() -> F,
     {
         for _ in 0..n {
-            self.add_solver(S::default())
+            self.workers.push(Worker::new(g(), self.tx.clone()));
         }
     }
 
-    pub fn with_default_solvers<S>(n: usize) -> Self
+    pub fn with<F, G>(n: usize, factory: G) -> Self
     where
-        S: Solver<T> + Send + 'static + Default,
+        F: Call<T, U> + Send + 'static,
+        G: Fn() -> F,
     {
         let mut this = Self::new();
-        this.add_default_solvers::<S>(n);
+        this.add_workers(n, factory);
         this
     }
 
-    pub fn add_cloned_solvers<S>(&mut self, n: usize, solver: &S)
+    pub fn with_cloned<F>(n: usize, f: &F) -> Self
     where
-        S: Solver<T> + Send + 'static + Clone,
+        F: Call<T, U> + Send + Clone + 'static,
     {
-        for _ in 0..n {
-            self.add_solver(solver.clone());
-        }
-    }
-
-    pub fn with_cloned_solvers<S>(n: usize, solver: &S) -> Self
-    where
-        S: Solver<T> + Send + 'static + Clone,
-    {
-        let mut this = Self::new();
-        this.add_cloned_solvers(n, solver);
-        this
+        Self::with(n, || f.clone())
     }
 }
 
-impl<T> Solver<T> for ThreadedSolver<T>
+impl<T, U> Call<T, U> for WorkerPool<T, U>
 where
     T: Split,
+    U: Join,
 {
-    fn solve(&self, state: T) -> T {
+    fn call(&self, t: T) -> U {
         let sn = self.workers.len();
         assert!(sn > 0, "no workers");
 
-        for (worker, part) in zip(&self.workers, state.parts(sn)) {
+        for (worker, part) in zip(&self.workers, t.to_parts(sn)) {
             worker.send(part);
         }
-        let mut parts: Vec<SplitPart<T>> = vec![];
+        let mut parts: Vec<SplitPart<U>> = vec![];
         for _ in 0..sn {
             parts.push(self.rx.recv().unwrap());
         }
@@ -298,12 +269,12 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use super::{vectorize, Call, Split, SplitPart, Threaded};
 
     fn test_vec_split(length: usize, n: usize) {
         let v: Vec<usize> = (0..length).collect();
-        let vs = v.clone().parts(n);
-        // assert_eq!(vs.len(), n);
+        let vs = v.clone().to_parts(n);
+        assert_eq!(vs.len(), n);
         let vj: Vec<usize> = SplitPart::join(vs).unwrap();
         assert_eq!(v, vj);
     }
@@ -316,5 +287,21 @@ mod test {
         test_vec_split(8, 5);
         test_vec_split(100, 1);
         test_vec_split(55, 47);
+    }
+
+    fn mul2(x: i64) -> i64 {
+        2 * x
+    }
+
+    #[test]
+    fn test_worker_pool() {
+        let q = || (0..10).collect::<Vec<i64>>();
+        let f = vectorize(mul2);
+        let res = f.call(q());
+
+        assert_eq!(res, f.threadpool(1).call(q()));
+        assert_eq!(res, f.threadpool(5).call(q()));
+        assert_eq!(res, f.threadpool(10).call(q()));
+        assert_eq!(res, f.threadpool(20).call(q()));
     }
 }

@@ -1,16 +1,17 @@
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use druid::piet::ImageFormat;
 use druid::ImageBuf;
 use image::{Rgb, RgbImage};
 
-use crate::state::MbState;
+use crate::solver::MbState;
 
 pub trait Painter<T> {
     fn paint(&self, t: &T) -> RgbImage;
 }
 
-pub trait ColorScale {
+pub trait ColorScale: Clone + Debug {
     fn get_color(&self, frac: f64) -> Rgb<u8>;
 }
 
@@ -65,6 +66,7 @@ where
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Greyscale;
 
 impl ColorScale for Greyscale {
@@ -74,6 +76,7 @@ impl ColorScale for Greyscale {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Rainbow;
 
 fn rainbow_color(n: usize) -> [u8; 3] {

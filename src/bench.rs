@@ -10,6 +10,37 @@ pub struct Benchmark {
     iterations: usize,
 }
 
+pub enum Unit {
+    Nanosecond,
+    Microsecond,
+    Millisecond,
+    Second,
+}
+
+impl Unit {
+    pub fn format(&self, d: &Duration, width: usize) -> String {
+        let (symbol, value) = match self {
+            Self::Nanosecond => ("ns", d.as_nanos()),
+            Self::Microsecond => ("µs", d.as_micros()),
+            Self::Millisecond => ("ms", d.as_millis()),
+            Self::Second => ("s", d.as_secs() as u128),
+        };
+        format!("{:>width$}{:<2}", value, symbol)
+    }
+
+    pub fn scaled(d: &Duration, treshold: u128) -> Self {
+        if d.as_nanos() < treshold {
+            Self::Nanosecond
+        } else if d.as_micros() < treshold {
+            Self::Microsecond
+        } else if d.as_millis() < treshold {
+            Self::Millisecond
+        } else {
+            Self::Second
+        }
+    }
+}
+
 impl Benchmark {
     pub fn iter<F: Fn() + 'static>(name: &str, n: usize, f: F) -> Self {
         Self {
@@ -23,7 +54,7 @@ impl Benchmark {
         Self::iter(name, 1, f)
     }
 
-    pub fn run(&self) -> Duration {
+    fn run(&self) -> Duration {
         let start = Instant::now();
         for _ in 0..self.iterations {
             (self.f)();
@@ -72,28 +103,32 @@ impl BenchmarkReport {
         println!();
         stdout().flush().unwrap();
     }
-
     pub fn show(&self) {
+        println!(
+            "  {: <30} {: >8}   {: >8}",
+            "benchmark", "total", "per_call"
+        );
         for (name, iterations, t) in &self.results {
+            let t_per_call = t.div_f64(*iterations as f64);
             println!(
-                "  {}\n    per call: {}μs\n    total: {}ms\n",
+                "  {: <30} {}   {}",
                 name,
-                t.as_micros() / *iterations as u128,
-                t.as_millis()
+                Unit::scaled(t, 10000).format(t, 6),
+                Unit::scaled(&t_per_call, 10000).format(&t_per_call, 6),
             )
         }
         stdout().flush().unwrap();
     }
 
     pub fn write_csv(&self, filename: &str) {
-        let mut lines: Vec<String> = vec!["benchmark,per_call_us,iterations,total_ms".to_string()];
+        let mut lines: Vec<String> = vec!["benchmark,total_us,iterations,per_call_us".to_string()];
         for (name, iterations, t) in &self.results {
             lines.push(format!(
                 "{},{},{},{}",
                 name,
                 t.as_micros(),
                 iterations,
-                t.as_millis()
+                t.as_micros() / *iterations as u128,
             ));
         }
         lines.push("".to_string());

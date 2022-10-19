@@ -4,6 +4,6 @@ pub mod bench;
 mod complex;
 pub mod coord;
 pub mod painter;
-pub mod state;
+pub mod solver;
 pub mod threads;
 pub mod updater;

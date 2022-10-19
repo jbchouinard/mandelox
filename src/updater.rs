@@ -206,7 +206,7 @@ where
                 Err(_) => return,
             };
             let updated_b = updater.update(&old_a, &old_b);
-            if let Err(_) = b_tx.send(updated_b) {
+            if b_tx.send(updated_b).is_err() {
                 return;
             };
         });
@@ -309,10 +309,8 @@ where
                 .with_mut(data, |data_b| *data_b = updated_data_b);
             ctx.request_paint();
             self.waiting_on_updates -= 1;
-        } else {
-            if self.waiting_on_updates > 0 {
-                ctx.request_timer(std::time::Duration::from_millis(100));
-            }
+        } else if self.waiting_on_updates > 0 {
+            ctx.request_timer(std::time::Duration::from_millis(100));
         }
         self.lens_b
             .with_mut(data, |data_b| self.widget.event(ctx, event, data_b, env))

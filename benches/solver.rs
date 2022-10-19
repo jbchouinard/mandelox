@@ -2,9 +2,8 @@ use std::collections::HashSet;
 
 use mandelox::bench::{Benchmark, BenchmarkReport};
 use mandelox::coord::Viewport;
-use mandelox::state::solver::{MbArraySolver, MbVecSolver};
-use mandelox::state::MbState;
-use mandelox::threads::{DefaultThreaded, Solver};
+use mandelox::solver::{MbArraySolver, MbState, MbVecSolver, Solver};
+use mandelox::threads::Call;
 
 fn thread_counts() -> Vec<usize> {
     let cpus = num_cpus::get_physical();
@@ -22,16 +21,16 @@ fn thread_counts() -> Vec<usize> {
     tcounts
 }
 
-fn benchmark_solver<S, T>(name: &str, solver: S, height: usize, repeats: usize) -> Benchmark
+fn benchmark_solver<S, T, U>(name: &str, solver: S, height: usize, repeats: usize) -> Benchmark
 where
     T: MbState + 'static,
-    S: Solver<T> + 'static,
+    S: Call<T, U> + 'static,
 {
     let width: usize = (3 * height) / 2;
     let grid = Viewport::default();
     let f = move || {
         let initial = T::initialize(width, height, &grid);
-        solver.solve(initial);
+        solver.call(initial);
     };
     Benchmark::iter(&format!("solver-{}-{}", name, height), repeats, f)
 }
@@ -41,13 +40,13 @@ fn benchmarks(height: usize, repeats: usize) -> Vec<Benchmark> {
     for t in thread_counts() {
         benches.push(benchmark_solver(
             &format!("arr-{}", t),
-            MbArraySolver::threaded(t),
+            MbArraySolver::default().threaded(t),
             height,
             repeats,
         ));
         benches.push(benchmark_solver(
             &format!("vec-{}", t),
-            MbVecSolver::threaded(t),
+            MbVecSolver::default().threaded(t),
             height,
             repeats,
         ));

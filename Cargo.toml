@@ -9,23 +9,28 @@ name = "mandelox"
 path = "src/lib.rs"
 
 [[bin]]
-name = "mandelox-gif"
-path = "src/imagegen/bin.rs"
+name = "mandelox-gen"
+path = "src/bins/imagegen.rs"
 
 [[bin]]
 name = "mandelox-viewer"
-path = "src/viewer/bin.rs"
+path = "src/bins/viewer.rs"
 
-[[bin]]
-name = "bench-solver"
-path = "src/bench/solver.rs"
+[[bench]]
+name = "workerpool"
+harness = false
 
-[[bin]]
-name = "bench-stateinit"
-path = "src/bench/stateinit.rs"
+[[bench]]
+name = "stateinit"
+harness = false
 
-# [profile.release]
-# debug = true
+[[bench]]
+name = "solver"
+harness = false
+
+[[bench]]
+name = "image"
+harness = false
 
 [dependencies]
 druid = { git = "https://github.com/linebender/druid.git" }

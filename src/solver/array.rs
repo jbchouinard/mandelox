@@ -1,15 +1,12 @@
 use std::sync::Arc;
 
 use druid::Data;
-use ndarray::{concatenate, prelude::*};
+use ndarray::{concatenate, s, Array, Array1, Array2, Axis, Zip};
 
-use crate::complex::{ci, cr, C};
+use crate::complex::*;
 use crate::coord::Viewport;
-use crate::threads::{RangeSplitter, Split};
-
-pub mod cell;
-pub mod shared;
-pub mod solver;
+use crate::solver::{MbState, Solver};
+use crate::threads::{Join, RangeSplitter, Split};
 
 fn generate_complex_grid(width: usize, height: usize, grid: &Viewport) -> Array2<C<f64>> {
     let x_coords: Array2<C<f64>> = (0..width)
@@ -35,112 +32,6 @@ fn generate_complex_grid(width: usize, height: usize, grid: &Viewport) -> Array2
     let y_coords = (y_coords * y_m + y_b) * ci(1.0);
 
     &x_coords + &y_coords
-}
-
-#[derive(Clone, Debug)]
-pub struct MbVecCell {
-    c: C<f64>,
-    z: C<f64>,
-    i: i16,
-}
-
-#[derive(Clone, Debug)]
-pub struct MbVecState {
-    width: usize,
-    height: usize,
-    iteration: i16,
-    state: Vec<MbVecCell>,
-}
-
-pub trait MbState {
-    fn initialize(width: usize, height: usize, grid: &Viewport) -> Self;
-    fn width(&self) -> usize;
-    fn height(&self) -> usize;
-    fn i_value(&self, x: usize, y: usize) -> i16;
-}
-
-impl Data for MbVecState {
-    fn same(&self, other: &Self) -> bool {
-        self.width == other.width
-            && self.height == other.height
-            && self.iteration == other.iteration
-            && self.state[self.width + 2].c == other.state[self.width + 2].c
-    }
-}
-
-impl MbState for MbVecState {
-    fn initialize(width: usize, height: usize, grid: &Viewport) -> Self {
-        let x_b = cr(grid.x.min);
-        let x_m = cr(grid.x.length() / (width as f64 - 1.0));
-        let y_b = ci(grid.y.min);
-        let y_m = ci(grid.y.length() / (height as f64 - 1.0));
-
-        let mut state = Vec::with_capacity(width * height);
-        let mut cy = y_b;
-        for _ in 0..height {
-            let mut cx = x_b;
-            for _ in 0..width {
-                let c = cx + cy;
-                state.push(MbVecCell { c, z: c, i: -1 });
-                cx += x_m;
-            }
-            cy += y_m;
-        }
-
-        Self {
-            width,
-            height,
-            state,
-            iteration: 0,
-        }
-    }
-    fn height(&self) -> usize {
-        self.height
-    }
-    fn width(&self) -> usize {
-        self.width
-    }
-    fn i_value(&self, x: usize, y: usize) -> i16 {
-        self.state[y * self.width + x].i
-    }
-}
-
-impl Split for MbVecState {
-    fn split_parts(self, n: usize) -> Vec<Self> {
-        let rows = self.state.split_parts(self.height);
-        let row_groups = rows.split_parts(n);
-
-        let mut parts = vec![];
-        for row_group in row_groups {
-            let height = row_group.len();
-            let state = Vec::<MbVecCell>::join_parts(row_group);
-            parts.push(Self {
-                width: self.width,
-                height,
-                state,
-                iteration: self.iteration,
-            })
-        }
-        parts
-    }
-    fn join_parts(parts: Vec<Self>) -> Self {
-        let mut height = 0;
-        let width = parts[0].width;
-        let iteration = parts[0].iteration;
-        let mut state_parts: Vec<Vec<MbVecCell>> = vec![];
-        for part in parts {
-            assert!(part.width == width);
-            assert!(part.iteration == iteration);
-            height += part.height;
-            state_parts.push(part.state.clone());
-        }
-        Self {
-            width,
-            height,
-            iteration,
-            state: Vec::join_parts(state_parts),
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -188,7 +79,7 @@ impl MbState for MbArrayState {
 }
 
 impl Split for MbArrayState {
-    fn split_parts(self, n: usize) -> Vec<Self> {
+    fn split_to_vec(self, n: usize) -> Vec<Self> {
         let mut split: Vec<Self> = vec![];
         for (m, n) in RangeSplitter::split(0, self.height, n) {
             let slice = s![m..n, ..];
@@ -206,8 +97,10 @@ impl Split for MbArrayState {
         }
         split
     }
+}
 
-    fn join_parts(states: Vec<MbArrayState>) -> Self {
+impl Join for MbArrayState {
+    fn join_vec(states: Vec<MbArrayState>) -> Self {
         let width = states[0].width;
         let iteration = states[0].iteration;
         let mut height = 0;
@@ -239,5 +132,63 @@ impl Split for MbArrayState {
             za: Arc::new(za),
             ia: Arc::new(ia),
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct MbArraySolver {
+    iterations: u16,
+    treshold: f64,
+}
+
+impl MbArraySolver {
+    pub fn new(treshold: f64, iterations: u16) -> Self {
+        Self {
+            treshold,
+            iterations,
+        }
+    }
+
+    fn iterate(&self, state: &MbArrayState) -> MbArrayState {
+        let mut new_za = Array2::zeros((state.height, state.width));
+        let mut new_ia = Array2::zeros((state.height, state.width));
+
+        Zip::from(state.ia.as_ref())
+            .and(&mut new_ia)
+            .and(state.za.as_ref())
+            .and(&mut new_za)
+            .and(state.ca.as_ref())
+            .for_each(|&iv, niv, &zv, nzv, &cv| {
+                *nzv = (zv * zv) + cv;
+                *niv = if (iv == -1) && (nzv.norm() > self.treshold) {
+                    state.iteration + 1
+                } else {
+                    iv
+                };
+            });
+
+        MbArrayState {
+            height: state.height(),
+            width: state.width(),
+            iteration: state.iteration + 1,
+            ca: state.ca.clone(),
+            za: Arc::new(new_za),
+            ia: Arc::new(new_ia),
+        }
+    }
+}
+
+impl Default for MbArraySolver {
+    fn default() -> Self {
+        Self::new(2.0, 100)
+    }
+}
+
+impl Solver<MbArrayState> for MbArraySolver {
+    fn solve(&self, mut state: MbArrayState) -> MbArrayState {
+        for _ in 0..self.iterations {
+            state = self.iterate(&state);
+        }
+        state
     }
 }

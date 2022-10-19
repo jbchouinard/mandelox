@@ -2,9 +2,9 @@ use std::iter::zip;
 
 use crate::complex::{ci, cr, C};
 use crate::coord::Viewport;
-use crate::state::shared::{SArray, SArrayLen, SArraySplit};
-use crate::state::MbState;
-use crate::threads::{Solver, Split};
+use crate::solver::sarray::{SArray, SArrayLen, SArraySplit};
+use crate::solver::{MbState, Solver};
+use crate::threads::{Join, Split};
 
 pub const MB_CELL_STATE_WIDTH: usize = 75;
 pub const MB_CELL_STATE_HEIGHT: usize = 50;
@@ -21,13 +21,16 @@ pub struct MbCellState {
 }
 
 impl Split for MbCellState {
-    fn split_parts(self, n: usize) -> Vec<Self> {
+    fn split_to_vec(self, n: usize) -> Vec<Self> {
         let Self { iteration, c, z, i } = self;
         zip(zip(c.split(n), z.split(n)), i.split(n))
             .map(|((c, z), i)| Self { iteration, c, z, i })
             .collect()
     }
-    fn join_parts(parts: Vec<Self>) -> Self {
+}
+
+impl Join for MbCellState {
+    fn join_vec(parts: Vec<Self>) -> Self {
         let iteration = parts[0].iteration;
         let (czs, is): (Vec<(CArray, CArray)>, Vec<IArray>) = parts
             .into_iter()
