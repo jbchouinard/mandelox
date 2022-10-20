@@ -6,8 +6,8 @@ use mandelox::Mandelbrot;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    width: usize,
-    height: usize,
+    width: i64,
+    height: i64,
     #[structopt(short, long, default_value = "out.png")]
     output: String,
 }
