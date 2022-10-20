@@ -1,7 +1,7 @@
 use std::iter::zip;
 
 use crate::complex::{ci, cr, C};
-use crate::coord::Viewport;
+use crate::coord::Frame;
 use crate::solver::sarray::{SArray, SArrayLen, SArraySplit};
 use crate::solver::{MbState, Solver};
 use crate::threads::{Join, Split};
@@ -48,7 +48,7 @@ impl Join for MbCellState {
 }
 
 impl MbState for MbCellState {
-    fn initialize(width: usize, height: usize, grid: &Viewport<f64>) -> Self {
+    fn initialize(width: usize, height: usize, grid: &Frame<f64>) -> Self {
         assert!(width == MB_CELL_STATE_WIDTH, "wrong width");
         assert!(height == MB_CELL_STATE_HEIGHT, "wrong height");
         let x_b = cr(grid.x.min);

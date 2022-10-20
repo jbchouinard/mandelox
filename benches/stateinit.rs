@@ -1,10 +1,10 @@
 use mandelox::bench::{Benchmark, BenchmarkReport};
-use mandelox::coord::Viewport;
+use mandelox::coord::Frame;
 use mandelox::solver::{MbArrayState, MbState, MbVecState};
 
 fn b_mbstate_init<T: MbState>(name: &str, height: usize) -> Benchmark {
     let width: usize = 3 * height / 2;
-    let grid = Viewport::default();
+    let grid = Frame::default();
 
     let f = move || {
         T::initialize(width, height, &grid);

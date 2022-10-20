@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use mandelox::bench::{Benchmark, BenchmarkReport};
-use mandelox::coord::Viewport;
+use mandelox::coord::Frame;
 use mandelox::solver::{MbArraySolver, MbState, MbVecSolver, Solver};
 use mandelox::threads::Call;
 
@@ -27,7 +27,7 @@ where
     S: Call<T, U> + 'static,
 {
     let width: usize = (3 * height) / 2;
-    let grid = Viewport::default();
+    let grid = Frame::default();
     let f = move || {
         let initial = T::initialize(width, height, &grid);
         solver.call(initial);

@@ -1,7 +1,7 @@
 use mandelox::bench::Benchmark;
 use mandelox::bench::BenchmarkReport;
 use mandelox::coord::Axis;
-use mandelox::coord::Viewport;
+use mandelox::coord::Frame;
 use mandelox::painter::Greyscale;
 use mandelox::painter::IValuePainter;
 use mandelox::painter::Painter;
@@ -19,7 +19,7 @@ where
     T: MbState + Split + Join + Send + 'static,
     S: Solver<T> + Default + Clone + Send + 'static,
 {
-    let scale = Viewport::new(Axis::new(-2.0, 1.0), Axis::new(-1.5, 1.5));
+    let scale = Frame::new(Axis::new(-2.0, 1.0), Axis::new(-1.5, 1.5));
 
     let solver = S::default().threaded(threads);
     let initial = T::initialize(width, height, &scale);

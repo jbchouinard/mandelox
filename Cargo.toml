@@ -2,19 +2,34 @@
 name = "mandelox"
 version = "0.2.0"
 edition = "2021"
-default-run = "mandelox-gen"
+default-run = "mandelox-imagegen"
+
+[dependencies]
+druid = { git = "https://github.com/linebender/druid.git", optional = true }
+image = "0.24.4"
+ndarray = "0.15.6"
+num = "0.4.0"
+num_cpus = "1.13.1"
+structopt = { version = "0.3.26", optional = true }
+
+[features]
+default = ["cli", "gui"]
+cli = ["structopt"]
+gui = ["druid"]
 
 [lib]
 name = "mandelox"
 path = "src/lib.rs"
 
 [[bin]]
-name = "mandelox-gen"
+name = "mandelox-imagegen"
 path = "src/bin/imagegen.rs"
+required-features = ["cli"]
 
 [[bin]]
 name = "mandelox-viewer"
 path = "src/bin/viewer.rs"
+required-features = ["gui"]
 
 [[bench]]
 name = "workerpool"
@@ -32,9 +47,3 @@ harness = false
 name = "image"
 harness = false
 
-[dependencies]
-druid = { git = "https://github.com/linebender/druid.git" }
-image = "0.24.4"
-ndarray = "0.15.6"
-num = "0.4.0"
-num_cpus = "1.13.1"

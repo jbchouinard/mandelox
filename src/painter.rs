@@ -1,8 +1,5 @@
 use std::fmt::Debug;
-use std::sync::Arc;
 
-use druid::piet::ImageFormat;
-use druid::ImageBuf;
 use image::{Rgb, RgbImage};
 
 use crate::solver::MbState;
@@ -113,15 +110,4 @@ impl ColorScale for Rainbow {
         let b = mix(rgb1[2], rgb2[2], rem);
         Rgb([r, g, b])
     }
-}
-
-pub fn convert_image(img: RgbImage) -> ImageBuf {
-    let raw: Arc<[u8]> = img.as_raw().clone().into();
-
-    ImageBuf::from_raw(
-        raw,
-        ImageFormat::Rgb,
-        img.width() as usize,
-        img.height() as usize,
-    )
 }

@@ -1,14 +1,13 @@
 use std::sync::Arc;
 
-use druid::Data;
 use ndarray::{concatenate, s, Array, Array1, Array2, Axis, Zip};
 
 use crate::complex::*;
-use crate::coord::Viewport;
+use crate::coord::{Frame, Viewbox};
 use crate::solver::{MbState, Solver};
 use crate::threads::{Join, RangeSplitter, Split};
 
-fn generate_complex_grid(width: usize, height: usize, grid: &Viewport<f64>) -> Array2<C<f64>> {
+fn generate_complex_grid(width: usize, height: usize, grid: &Frame<f64>) -> Array2<C<f64>> {
     let x_coords: Array2<C<f64>> = (0..width)
         .map(|n| cr(n as f64))
         .collect::<Array1<C<f64>>>()
@@ -36,25 +35,39 @@ fn generate_complex_grid(width: usize, height: usize, grid: &Viewport<f64>) -> A
 
 #[derive(Clone, Debug)]
 pub struct MbArrayState {
-    width: usize,
-    height: usize,
-    iteration: i16,
-    ca: Arc<Array2<C<f64>>>,
-    za: Arc<Array2<C<f64>>>,
-    ia: Arc<Array2<i16>>,
+    pub(crate) width: usize,
+    pub(crate) height: usize,
+    pub(crate) iteration: i16,
+    pub(crate) ca: Arc<Array2<C<f64>>>,
+    pub(crate) za: Arc<Array2<C<f64>>>,
+    pub(crate) ia: Arc<Array2<i16>>,
 }
 
-impl Data for MbArrayState {
-    fn same(&self, other: &Self) -> bool {
-        self.width == other.width
-            && self.height == other.height
-            && self.iteration == other.iteration
-            && self.ca[[1, 1]] == other.ca[[1, 1]]
+impl From<Viewbox> for MbArrayState {
+    fn from(v: Viewbox) -> Self {
+        let width = v.width as usize;
+        let height = v.height as usize;
+        let ca: Array2<C<f64>> = v
+            .generate_complex_coordinates()
+            .into_iter()
+            .collect::<Array1<C<f64>>>()
+            .into_shape((height, width))
+            .unwrap();
+        let za = ca.clone();
+        let ia: Array2<i16> = Array::from_elem((height, width), -1);
+        Self {
+            width,
+            height,
+            iteration: 0,
+            ca: Arc::new(ca),
+            za: Arc::new(za),
+            ia: Arc::new(ia),
+        }
     }
 }
 
 impl MbState for MbArrayState {
-    fn initialize(width: usize, height: usize, scale: &Viewport<f64>) -> Self {
+    fn initialize(width: usize, height: usize, scale: &Frame<f64>) -> Self {
         let ca = generate_complex_grid(width, height, scale);
         let za = ca.clone();
         let ia: Array2<i16> = Array::from_elem((height, width), -1);

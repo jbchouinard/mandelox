@@ -1,36 +1,41 @@
-use druid::Data;
-
 use crate::complex::*;
-use crate::coord::Viewport;
+use crate::coord::{Frame, Viewbox};
 use crate::solver::{MbState, Solver};
 use crate::threads::{Join, Split};
 
 #[derive(Clone, Debug)]
 pub struct MbVecCell {
-    c: C<f64>,
-    z: C<f64>,
-    i: i16,
+    pub(crate) c: C<f64>,
+    pub(crate) z: C<f64>,
+    pub(crate) i: i16,
 }
 
 #[derive(Clone, Debug)]
 pub struct MbVecState {
-    width: usize,
-    height: usize,
-    iteration: i16,
-    state: Vec<MbVecCell>,
+    pub(crate) width: usize,
+    pub(crate) height: usize,
+    pub(crate) iteration: i16,
+    pub(crate) state: Vec<MbVecCell>,
 }
 
-impl Data for MbVecState {
-    fn same(&self, other: &Self) -> bool {
-        self.width == other.width
-            && self.height == other.height
-            && self.iteration == other.iteration
-            && self.state[self.width + 2].c == other.state[self.width + 2].c
+impl From<Viewbox> for MbVecState {
+    fn from(v: Viewbox) -> Self {
+        let state: Vec<MbVecCell> = v
+            .generate_complex_coordinates()
+            .into_iter()
+            .map(|c| MbVecCell { c, z: c, i: -1 })
+            .collect();
+        Self {
+            width: v.width as usize,
+            height: v.height as usize,
+            iteration: 0,
+            state,
+        }
     }
 }
 
 impl MbState for MbVecState {
-    fn initialize(width: usize, height: usize, grid: &Viewport<f64>) -> Self {
+    fn initialize(width: usize, height: usize, grid: &Frame<f64>) -> Self {
         let x_b = cr(grid.x.min);
         let x_m = cr(grid.x.length() / (width as f64 - 1.0));
         let y_b = ci(grid.y.min);

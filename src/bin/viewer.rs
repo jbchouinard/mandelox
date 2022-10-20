@@ -8,20 +8,21 @@ use druid::{
     Lens, PaintCtx, PlatformError, RenderContext, Size, UnitPoint, Widget, WidgetExt, WindowDesc,
 };
 
-use mandelox::coord::Viewport;
-use mandelox::painter::{convert_image, IValuePainter, Painter as MandeloxPainter, Rainbow};
+use mandelox::coord::Frame;
+use mandelox::gui::convert_image;
+use mandelox::gui::updater::{Refresher, Updater};
+use mandelox::painter::{IValuePainter, Painter as MandeloxPainter, Rainbow};
 use mandelox::solver::{MbState, MbVecSolver, MbVecState, Solver};
 use mandelox::threads::Call;
-use mandelox::updater::{Refresher, Updater};
 
 const VIEWER_W: f64 = 1200.0;
 const VIEWER_H: f64 = 800.0;
 const NAV_BUTTON_W: f64 = 40.0;
 const NAV_BUTTON_H: f64 = 40.0;
 
-fn default_viewport() -> Viewport<f64> {
+fn default_viewport() -> Frame<f64> {
     let ratio = VIEWER_W / VIEWER_H;
-    Viewport::from_box(-0.5, 0.0, 3.0, 3.0 / ratio)
+    Frame::from_box(-0.5, 0.0, 3.0, 3.0 / ratio)
 }
 
 #[derive(Clone, Data, Lens, Debug)]
@@ -29,7 +30,7 @@ struct AppState {
     width: Arc<AtomicUsize>,
     height: Arc<AtomicUsize>,
     state: Option<MbVecState>,
-    viewport: Viewport<f64>,
+    viewport: Frame<f64>,
 }
 
 impl AppState {
@@ -37,7 +38,7 @@ impl AppState {
         width: usize,
         height: usize,
         state: Option<MbVecState>,
-        viewport: Viewport<f64>,
+        viewport: Frame<f64>,
     ) -> Self {
         Self {
             width: Arc::new(AtomicUsize::new(width)),
@@ -70,8 +71,8 @@ impl AppState {
 
 pub struct MbUpdater;
 
-impl Updater<Viewport<f64>, AppState> for MbUpdater {
-    fn update(&mut self, old_a: &Viewport<f64>, old_b: &AppState) -> AppState {
+impl Updater<Frame<f64>, AppState> for MbUpdater {
+    fn update(&mut self, old_a: &Frame<f64>, old_b: &AppState) -> AppState {
         let width = old_b.get_width();
         let height = old_b.get_height();
         if width == 0 || height == 0 {
@@ -144,25 +145,25 @@ where
     }
 }
 
-fn build_pan_button(text: &str, x: f64, y: f64) -> impl Widget<Viewport<f64>> {
+fn build_pan_button(text: &str, x: f64, y: f64) -> impl Widget<Frame<f64>> {
     Button::new(text)
-        .on_click(move |_ctx, data: &mut Viewport<f64>, _env| data.pan_relative(x, y))
+        .on_click(move |_ctx, data: &mut Frame<f64>, _env| data.pan_relative(x, y))
         .fix_size(NAV_BUTTON_W, NAV_BUTTON_H)
 }
 
-fn build_zoom_button(text: &str, factor: f64) -> impl Widget<Viewport<f64>> {
+fn build_zoom_button(text: &str, factor: f64) -> impl Widget<Frame<f64>> {
     Button::new(text)
-        .on_click(move |_ctx, data: &mut Viewport<f64>, _env| data.zoom(factor))
+        .on_click(move |_ctx, data: &mut Frame<f64>, _env| data.zoom(factor))
         .fix_size(1.5 * NAV_BUTTON_W, NAV_BUTTON_H)
 }
 
-fn build_reset_button(text: &str) -> impl Widget<Viewport<f64>> {
+fn build_reset_button(text: &str) -> impl Widget<Frame<f64>> {
     Button::new(text)
-        .on_click(move |_ctx, data: &mut Viewport<f64>, _env| *data = default_viewport())
+        .on_click(move |_ctx, data: &mut Frame<f64>, _env| *data = default_viewport())
         .fix_size(NAV_BUTTON_W, NAV_BUTTON_H)
 }
 
-fn build_viewport_buttons() -> impl Widget<Viewport<f64>> {
+fn build_viewport_buttons() -> impl Widget<Frame<f64>> {
     Container::new(
         Flex::column()
             .with_flex_child(
@@ -207,11 +208,11 @@ fn flabel<F: Fn(&T) -> f64 + 'static, T: Data>(name: &str, f: F) -> Label<T> {
         )
 }
 
-fn build_viewport_info() -> impl Widget<Viewport<f64>> {
+fn build_viewport_info() -> impl Widget<Frame<f64>> {
     Flex::column()
-        .with_flex_child(flabel("X", |data: &Viewport<f64>| data.x.center()), 1.0)
-        .with_flex_child(flabel("Y", |data: &Viewport<f64>| data.y.center()), 1.0)
-        .with_flex_child(flabel("L", |data: &Viewport<f64>| data.x.length()), 1.0)
+        .with_flex_child(flabel("X", |data: &Frame<f64>| data.x.center()), 1.0)
+        .with_flex_child(flabel("Y", |data: &Frame<f64>| data.y.center()), 1.0)
+        .with_flex_child(flabel("L", |data: &Frame<f64>| data.x.length()), 1.0)
         .padding(10.0)
 }
 
