@@ -147,8 +147,8 @@ impl Viewbox {
     pub fn new(x: i64, y: i64, w: i64, h: i64, scale: f64) -> Self {
         Self {
             center: Point::new(x, y),
-            width: w.try_into().unwrap(),
-            height: h.try_into().unwrap(),
+            width: w,
+            height: h,
             scale,
         }
     }

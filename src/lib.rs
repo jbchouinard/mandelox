@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use image::RgbImage;
 use painter::Rainbow;
@@ -97,8 +97,6 @@ pub struct MandelbrotWorker {
     tx: Sender<MAction>,
     images: Arc<RwLock<VecDeque<RgbImage>>>,
     shutdown: Arc<AtomicBool>,
-    last_event_t: Instant,
-    cooldown: Duration,
 }
 
 impl MandelbrotWorker {
@@ -167,7 +165,7 @@ impl MandelbrotWorker {
                 };
                 if repaint {
                     if let Some(ref m) = m {
-                        if let Err(_) = tx.send(m.paint(Rainbow, 100)) {
+                        if tx.send(m.paint(Rainbow, 100)).is_err() {
                             return;
                         }
                     }
@@ -189,8 +187,6 @@ impl MandelbrotWorker {
             tx: tx_actions,
             images,
             shutdown,
-            last_event_t: Instant::now(),
-            cooldown: Duration::from_millis(50),
         }
     }
 
