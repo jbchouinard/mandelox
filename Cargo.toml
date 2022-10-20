@@ -10,11 +10,11 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "mandelox-gen"
-path = "src/bins/imagegen.rs"
+path = "src/bin/imagegen.rs"
 
 [[bin]]
 name = "mandelox-viewer"
-path = "src/bins/viewer.rs"
+path = "src/bin/viewer.rs"
 
 [[bench]]
 name = "workerpool"

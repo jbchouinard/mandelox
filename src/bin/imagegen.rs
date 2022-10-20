@@ -1,6 +1,6 @@
 use mandelox::coord::{Axis, Viewport};
 use mandelox::painter::{IValuePainter, Painter, Rainbow};
-use mandelox::solver::{MbState, MbVecSolver, MbVecState, Solver};
+use mandelox::solver::{default_solver, MbState, MbVecState};
 use mandelox::threads::Call;
 
 fn main() {
@@ -8,7 +8,7 @@ fn main() {
     let height: usize = 1600;
     let scale = Viewport::new(Axis::new(-2.0, 1.0), Axis::new(-1.2, 1.2));
 
-    let solver = MbVecSolver::default().threaded(num_cpus::get_physical());
+    let solver = default_solver();
     let initial = MbVecState::initialize(width, height, &scale);
 
     let solved = solver.call(initial);

@@ -8,7 +8,7 @@ use crate::coord::Viewport;
 use crate::solver::{MbState, Solver};
 use crate::threads::{Join, RangeSplitter, Split};
 
-fn generate_complex_grid(width: usize, height: usize, grid: &Viewport) -> Array2<C<f64>> {
+fn generate_complex_grid(width: usize, height: usize, grid: &Viewport<f64>) -> Array2<C<f64>> {
     let x_coords: Array2<C<f64>> = (0..width)
         .map(|n| cr(n as f64))
         .collect::<Array1<C<f64>>>()
@@ -54,7 +54,7 @@ impl Data for MbArrayState {
 }
 
 impl MbState for MbArrayState {
-    fn initialize(width: usize, height: usize, scale: &Viewport) -> Self {
+    fn initialize(width: usize, height: usize, scale: &Viewport<f64>) -> Self {
         let ca = generate_complex_grid(width, height, scale);
         let za = ca.clone();
         let ia: Array2<i16> = Array::from_elem((height, width), -1);

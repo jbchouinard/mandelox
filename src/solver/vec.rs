@@ -30,7 +30,7 @@ impl Data for MbVecState {
 }
 
 impl MbState for MbVecState {
-    fn initialize(width: usize, height: usize, grid: &Viewport) -> Self {
+    fn initialize(width: usize, height: usize, grid: &Viewport<f64>) -> Self {
         let x_b = cr(grid.x.min);
         let x_m = cr(grid.x.length() / (width as f64 - 1.0));
         let y_b = ci(grid.y.min);

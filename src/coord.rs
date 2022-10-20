@@ -1,59 +1,81 @@
 use druid::{Data, Lens};
+use num::{traits::NumOps, Num, One};
 
-#[derive(Clone, Debug, Data, Lens)]
-pub struct Axis {
-    pub min: f64,
-    pub max: f64,
+trait Two {
+    fn two() -> Self;
 }
 
-impl Axis {
-    pub fn new(min: f64, max: f64) -> Self {
+impl<T> Two for T
+where
+    T: One + NumOps,
+{
+    fn two() -> Self {
+        T::one() + T::one()
+    }
+}
+
+#[derive(Clone, Debug, Data, Lens)]
+pub struct Axis<T> {
+    pub min: T,
+    pub max: T,
+}
+
+impl<T> Axis<T>
+where
+    T: Num + Copy,
+{
+    pub fn new(min: T, max: T) -> Self {
         Self { min, max }
     }
 
-    pub fn length(&self) -> f64 {
+    pub fn length(&self) -> T {
         self.max - self.min
     }
 
-    pub fn center(&self) -> f64 {
-        (self.max + self.min) / 2.0
+    pub fn center(&self) -> T {
+        (self.max + self.min) / (T::one() + T::one())
     }
 }
 
 #[derive(Clone, Debug, Data, Lens)]
-pub struct Viewport {
-    pub x: Axis,
-    pub y: Axis,
+pub struct Viewport<T> {
+    pub x: Axis<T>,
+    pub y: Axis<T>,
 }
 
-impl Viewport {
-    pub fn new(x: Axis, y: Axis) -> Self {
+impl<T> Viewport<T>
+where
+    T: Num + Copy,
+{
+    pub fn new(x: Axis<T>, y: Axis<T>) -> Self {
         Self { x, y }
     }
 
-    pub fn from_floats(x1: f64, x2: f64, y1: f64, y2: f64) -> Self {
+    pub fn from_floats(x1: T, x2: T, y1: T, y2: T) -> Self {
         Self::new(Axis::new(x1, x2), Axis::new(y1, y2))
     }
 
-    pub fn from_box(center_x: f64, center_y: f64, width: f64, height: f64) -> Self {
-        let x1 = center_x - (width / 2.0);
-        let x2 = center_x + (width / 2.0);
-        let y1 = center_y - (height / 2.0);
-        let y2 = center_y + (height / 2.0);
+    pub fn from_box(center_x: T, center_y: T, width: T, height: T) -> Self {
+        let x1 = center_x - (width / T::two());
+        let x2 = center_x + (width / T::two());
+        let y1 = center_y - (height / T::two());
+        let y2 = center_y + (height / T::two());
         Self::from_floats(x1, x2, y1, y2)
     }
 
-    pub fn aspect_ratio(&self) -> f64 {
+    pub fn aspect_ratio(&self) -> T {
         self.x.length() / self.y.length()
     }
 
-    pub fn pan(&mut self, x: f64, y: f64) {
-        self.x.min += x;
-        self.x.max += x;
-        self.y.min += y;
-        self.y.max += y;
+    pub fn pan(&mut self, x: T, y: T) {
+        self.x.min = self.x.min + x;
+        self.x.max = self.x.max + x;
+        self.y.min = self.y.min + y;
+        self.y.max = self.y.max + y;
     }
+}
 
+impl Viewport<f64> {
     pub fn pan_relative(&mut self, xfrac: f64, yfrac: f64) {
         self.pan(xfrac * self.x.length(), yfrac * self.y.length());
     }
@@ -68,7 +90,7 @@ impl Viewport {
     }
 }
 
-impl Default for Viewport {
+impl Default for Viewport<f64> {
     fn default() -> Self {
         Self::new(Axis::new(-2.0, 1.0), Axis::new(-1.0, 1.0))
     }
