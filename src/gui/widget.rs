@@ -1,5 +1,5 @@
 use druid::widget::prelude::*;
-use druid::{Code, MouseButton, Widget};
+use druid::{Code, MouseButton, Size, Widget};
 
 use crate::gui::convert_image;
 use crate::MandelbrotWorker;
@@ -25,6 +25,7 @@ impl MandelbrotWidget {
         let height = f64::round(size.height) as i64;
         let width = f64::round(size.width) as i64;
         if !(self.width == width && self.height == height) {
+            println!("resize {}x{}", width, height);
             self.worker.resize(width, height);
             self.width = width;
             self.height = height;
@@ -103,7 +104,10 @@ impl Widget<()> for MandelbrotWidget {
         _data: &(),
         _env: &Env,
     ) -> Size {
-        bc.max()
+        let Size { width, height } = bc.max();
+        let h = ((height as u64) / 8) * 8;
+        let w = ((width as u64) / 8) * 8;
+        Size::new(w as f64, h as f64)
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, _: &(), _env: &Env) {

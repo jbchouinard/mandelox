@@ -3,35 +3,9 @@ use std::sync::Arc;
 use ndarray::{concatenate, s, Array, Array1, Array2, Axis, Zip};
 
 use crate::complex::*;
-use crate::coord::{Frame, Viewbox};
+use crate::coord::Viewbox;
 use crate::solver::{MbState, Solver};
 use crate::threads::{Join, RangeSplitter, Split};
-
-fn generate_complex_grid(width: usize, height: usize, grid: &Frame<f64>) -> Array2<C<f64>> {
-    let x_coords: Array2<C<f64>> = (0..width)
-        .map(|n| cr(n as f64))
-        .collect::<Array1<C<f64>>>()
-        .into_shape((1, width))
-        .unwrap();
-
-    let x_b = cr(grid.x.min);
-    let x_m = cr(grid.x.length() / (width as f64 - 1.0));
-
-    let x_coords = x_coords * x_m + x_b;
-
-    let y_coords: Array2<C<f64>> = (0..height)
-        .map(|n| cr(n as f64))
-        .collect::<Array1<C<f64>>>()
-        .into_shape((height, 1))
-        .unwrap();
-
-    let y_b = cr(grid.y.min);
-    let y_m = cr(grid.y.length() / (height as f64 - 1.0));
-
-    let y_coords = (y_coords * y_m + y_b) * ci(1.0);
-
-    &x_coords + &y_coords
-}
 
 #[derive(Clone, Debug)]
 pub struct MbArrayState {
@@ -67,19 +41,6 @@ impl From<Viewbox> for MbArrayState {
 }
 
 impl MbState for MbArrayState {
-    fn initialize(width: usize, height: usize, scale: &Frame<f64>) -> Self {
-        let ca = generate_complex_grid(width, height, scale);
-        let za = ca.clone();
-        let ia: Array2<i16> = Array::from_elem((height, width), -1);
-        Self {
-            width,
-            height,
-            iteration: 0,
-            ca: Arc::new(ca),
-            za: Arc::new(za),
-            ia: Arc::new(ia),
-        }
-    }
     fn width(&self) -> usize {
         self.width
     }

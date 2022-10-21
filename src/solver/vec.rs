@@ -1,5 +1,5 @@
 use crate::complex::*;
-use crate::coord::{Frame, Viewbox};
+use crate::coord::Viewbox;
 use crate::solver::{MbState, Solver};
 use crate::threads::{Join, Split};
 
@@ -8,6 +8,20 @@ pub struct MbVecCell {
     pub(crate) c: C<f64>,
     pub(crate) z: C<f64>,
     pub(crate) i: i16,
+}
+
+impl MbVecCell {
+    #[inline]
+    pub fn iterate(&mut self, iterations: u16, treshold: f64) {
+        for iteration in 0..iterations {
+            if self.i == -1 {
+                self.z = (self.z * self.z) + self.c;
+                if self.z.norm() > treshold {
+                    self.i = iteration as i16;
+                }
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -35,31 +49,6 @@ impl From<Viewbox> for MbVecState {
 }
 
 impl MbState for MbVecState {
-    fn initialize(width: usize, height: usize, grid: &Frame<f64>) -> Self {
-        let x_b = cr(grid.x.min);
-        let x_m = cr(grid.x.length() / (width as f64 - 1.0));
-        let y_b = ci(grid.y.min);
-        let y_m = ci(grid.y.length() / (height as f64 - 1.0));
-
-        let mut state = Vec::with_capacity(width * height);
-        let mut cy = y_b;
-        for _ in 0..height {
-            let mut cx = x_b;
-            for _ in 0..width {
-                let c = cx + cy;
-                state.push(MbVecCell { c, z: c, i: -1 });
-                cx += x_m;
-            }
-            cy += y_m;
-        }
-
-        Self {
-            width,
-            height,
-            state,
-            iteration: 0,
-        }
-    }
     fn height(&self) -> usize {
         self.height
     }
@@ -122,9 +111,11 @@ impl MbVecSolver {
     fn iterate(&self, state: &mut MbVecState) {
         state.iteration += 1;
         for cell in &mut state.state {
-            cell.z = (cell.z * cell.z) + cell.c;
-            if (cell.i == -1) && (cell.z.norm() > self.treshold) {
-                cell.i = state.iteration
+            if cell.i == -1 {
+                cell.z = (cell.z * cell.z) + cell.c;
+                if cell.z.norm() > self.treshold {
+                    cell.i = state.iteration
+                }
             }
         }
     }
@@ -132,9 +123,20 @@ impl MbVecSolver {
 
 impl Solver<MbVecState> for MbVecSolver {
     fn solve(&self, mut state: MbVecState) -> MbVecState {
-        for _ in 0..self.iterations {
-            self.iterate(&mut state);
+        // for _ in 0..self.iterations {
+        //     self.iterate(&mut state);
+        // }
+        for iteration in 0..self.iterations {
+            for cell in &mut state.state {
+                if cell.i == -1 {
+                    cell.z = (cell.z * cell.z) + cell.c;
+                    if cell.z.norm() > self.treshold {
+                        cell.i = iteration as i16;
+                    }
+                }
+            }
         }
+        state.iteration = self.iterations as i16;
         state
     }
 }

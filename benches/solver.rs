@@ -1,8 +1,10 @@
 use std::collections::HashSet;
 
 use mandelox::bench::{Benchmark, BenchmarkReport};
-use mandelox::coord::Frame;
-use mandelox::solver::{MbArraySolver, MbState, MbVecSolver, Solver};
+use mandelox::coord::Viewbox;
+use mandelox::solver::{
+    MbArraySolver, MbArrayState, MbState, MbVecSolver, MbVecState, Solver, VecUvSolver, VecUvState,
+};
 use mandelox::threads::Call;
 
 fn thread_counts() -> Vec<usize> {
@@ -27,10 +29,25 @@ where
     S: Call<T, U> + 'static,
 {
     let width: usize = (3 * height) / 2;
-    let grid = Frame::default();
+    let v = Viewbox::initial(width.try_into().unwrap(), height.try_into().unwrap());
     let f = move || {
-        let initial = T::initialize(width, height, &grid);
+        let initial = v.into();
         solver.call(initial);
+    };
+    Benchmark::iter(&format!("solver-{}-{}", name, height), repeats, f)
+}
+
+fn benchmark_solver_1t<S, T>(name: &str, height: usize, repeats: usize) -> Benchmark
+where
+    T: MbState + 'static + Clone,
+    S: Solver<T> + 'static + Default,
+{
+    let width: usize = (3 * height) / 2;
+    let v = Viewbox::initial(width.try_into().unwrap(), height.try_into().unwrap());
+    let solver = S::default();
+    let initial: T = v.into();
+    let f = move || {
+        solver.solve(initial.clone());
     };
     Benchmark::iter(&format!("solver-{}-{}", name, height), repeats, f)
 }
@@ -55,5 +72,19 @@ fn benchmarks(height: usize, repeats: usize) -> Vec<Benchmark> {
 }
 
 fn main() {
-    BenchmarkReport::with_benches(&benchmarks(1000, 10)).report("solver");
+    BenchmarkReport::with_benches(&[
+        benchmark_solver_1t::<MbVecSolver, MbVecState>("vec", 500, 1),
+        benchmark_solver_1t::<VecUvSolver, VecUvState>("vecuv", 500, 1),
+        benchmark_solver_1t::<MbArraySolver, MbArrayState>("arr", 500, 1),
+        benchmark_solver_1t::<MbVecSolver, MbVecState>("vec", 1000, 1),
+        benchmark_solver_1t::<VecUvSolver, VecUvState>("vecuv", 1000, 1),
+        benchmark_solver_1t::<MbArraySolver, MbArrayState>("arr", 1000, 1),
+        benchmark_solver_1t::<MbVecSolver, MbVecState>("vec", 2000, 1),
+        benchmark_solver_1t::<VecUvSolver, VecUvState>("vecuv", 2000, 1),
+        benchmark_solver_1t::<MbArraySolver, MbArrayState>("arr", 2000, 1),
+        benchmark_solver_1t::<MbVecSolver, MbVecState>("vec", 4000, 1),
+        benchmark_solver_1t::<VecUvSolver, VecUvState>("vecuv", 4000, 1),
+        benchmark_solver_1t::<MbArraySolver, MbArrayState>("arr", 4000, 1),
+    ])
+    .report("solver");
 }

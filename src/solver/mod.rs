@@ -1,13 +1,15 @@
-use crate::coord::{Frame, Viewbox};
+use crate::coord::Viewbox;
 use crate::threads::{Call, Join, Split, WorkerPool};
 
 pub mod array;
 // pub mod cell;
 // pub mod sarray;
 pub mod vec;
+pub mod vecuv;
 
 pub use array::{MbArraySolver, MbArrayState};
 pub use vec::{MbVecSolver, MbVecState};
+pub use vecuv::{VecUvSolver, VecUvState};
 
 pub trait Solver<T> {
     fn solve(&self, state: T) -> T;
@@ -45,7 +47,6 @@ pub trait Slice {
 }
 
 pub trait MbState: From<Viewbox> {
-    fn initialize(width: usize, height: usize, grid: &Frame<f64>) -> Self;
     fn width(&self) -> usize;
     fn height(&self) -> usize;
     fn i_value(&self, x: usize, y: usize) -> i16;
