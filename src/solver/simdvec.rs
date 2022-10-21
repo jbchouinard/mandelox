@@ -1,10 +1,8 @@
 use lazy_static::lazy_static;
 use ultraviolet::{f64x4, DMat2x4, DVec2x4};
-use wide::{CmpEq, CmpGt};
+use wide::CmpGt;
 
-use crate::MbState;
-use crate::Solver;
-use crate::Viewbox;
+use crate::{Join, MbState, Solver, Split, Viewbox};
 
 lazy_static! {
     static ref INF: f64x4 = f64x4::splat(f64::INFINITY);
@@ -48,13 +46,13 @@ pub fn c4tostr(c: C4) -> String {
 }
 
 #[derive(Debug, Clone)]
-pub struct VecUvCell {
+pub struct SimdVecCell {
     pub(crate) c: C4,
     pub(crate) z: C4,
     pub(crate) i: f64x4,
 }
 
-impl VecUvCell {
+impl SimdVecCell {
     pub fn iterate(&mut self, iterations: usize, mut iteration: f64x4, treshold: f64x4) {
         for _ in 0..iterations {
             iteration += *ONE;
@@ -68,13 +66,13 @@ impl VecUvCell {
 }
 
 #[derive(Clone)]
-pub struct VecUvState {
+pub struct SimdVecState {
     pub(crate) width: usize,
     pub(crate) height: usize,
-    pub(crate) state: Vec<VecUvCell>,
+    pub(crate) state: Vec<SimdVecCell>,
 }
 
-impl MbState for VecUvState {
+impl MbState for SimdVecState {
     fn width(&self) -> usize {
         self.width
     }
@@ -83,11 +81,16 @@ impl MbState for VecUvState {
     }
     fn i_value(&self, x: usize, y: usize) -> i16 {
         let n = self.width * y + x;
-        self.state[n / 4].i.as_array_ref()[n % 4] as i16
+        let ival = self.state[n / 4].i.as_array_ref()[n % 4];
+        if ival == f64::INFINITY {
+            -1
+        } else {
+            ival as i16
+        }
     }
 }
 
-impl From<Viewbox> for VecUvState {
+impl From<Viewbox> for SimdVecState {
     fn from(v: Viewbox) -> Self {
         let cs: Vec<num::complex::Complex<f64>> = v.generate_complex_coordinates();
         assert!(cs.len() % 4 == 0, "oops");
@@ -97,7 +100,7 @@ impl From<Viewbox> for VecUvState {
             let re = [cs[i].re, cs[i + 1].re, cs[i + 2].re, cs[i + 3].re];
             let im = [cs[i].im, cs[i + 1].im, cs[i + 2].im, cs[i + 3].im];
             let c = c4(f64x4::new(re), f64x4::new(im));
-            state.push(VecUvCell {
+            state.push(SimdVecCell {
                 c,
                 z: c,
                 i: f64x4::splat(f64::INFINITY),
@@ -112,11 +115,49 @@ impl From<Viewbox> for VecUvState {
     }
 }
 
-pub struct VecUvSolver {
+impl Split for SimdVecState {
+    fn split_to_vec(self, n: usize) -> Vec<Self> {
+        let rows = self.state.split_to_vec(self.height);
+        let row_groups = rows.split_to_vec(n);
+
+        let mut parts = vec![];
+        for row_group in row_groups {
+            let height = row_group.len();
+            let state = Vec::<SimdVecCell>::join_vec(row_group);
+            parts.push(Self {
+                width: self.width,
+                height,
+                state,
+            })
+        }
+        parts
+    }
+}
+
+impl Join for SimdVecState {
+    fn join_vec(parts: Vec<Self>) -> Self {
+        let mut height = 0;
+        let width = parts[0].width;
+        let mut state_parts: Vec<Vec<SimdVecCell>> = vec![];
+        for part in parts {
+            assert!(part.width == width);
+            height += part.height;
+            state_parts.push(part.state.clone());
+        }
+        Self {
+            width,
+            height,
+            state: Vec::join_vec(state_parts),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SimdVecSolver {
     treshold: f64x4,
 }
 
-impl Default for VecUvSolver {
+impl Default for SimdVecSolver {
     fn default() -> Self {
         Self {
             treshold: f64x4::splat(2.0),
@@ -124,8 +165,8 @@ impl Default for VecUvSolver {
     }
 }
 
-impl Solver<VecUvState> for VecUvSolver {
-    fn solve(&self, mut state: VecUvState) -> VecUvState {
+impl Solver<SimdVecState> for SimdVecSolver {
+    fn solve(&self, mut state: SimdVecState) -> SimdVecState {
         for cell in &mut state.state {
             let mut iteration = *ZERO;
             for _ in 0..100 {
@@ -148,7 +189,7 @@ pub mod test {
     #[test]
     fn test_complex4() {
         let treshold = f64x4::splat(100.0);
-        let VecUvState { mut state, .. } = Viewbox::initial(8, 1).into();
+        let SimdVecState { mut state, .. } = Viewbox::initial(8, 1).into();
         let mut cell1 = state.pop().unwrap();
         let mut cell2 = state.pop().unwrap();
         println!("{:?} {:?}", cell1.i, cell2.i);

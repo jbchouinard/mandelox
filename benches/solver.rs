@@ -2,9 +2,7 @@ use std::collections::HashSet;
 
 use mandelox::bench::{Benchmark, BenchmarkReport};
 use mandelox::coord::Viewbox;
-use mandelox::solver::{
-    MbArraySolver, MbArrayState, MbState, MbVecSolver, MbVecState, Solver, VecUvSolver, VecUvState,
-};
+use mandelox::solver::{ArraySolver, MbState, SimdVecSolver, Solver, VecSolver};
 use mandelox::threads::Call;
 
 fn thread_counts() -> Vec<usize> {
@@ -25,45 +23,51 @@ fn thread_counts() -> Vec<usize> {
 
 fn benchmark_solver<S, T, U>(name: &str, solver: S, height: usize, repeats: usize) -> Benchmark
 where
-    T: MbState + 'static,
+    T: MbState + 'static + Clone,
     S: Call<T, U> + 'static,
 {
     let width: usize = (3 * height) / 2;
     let v = Viewbox::initial(width.try_into().unwrap(), height.try_into().unwrap());
-    let f = move || {
-        let initial = v.into();
-        solver.call(initial);
-    };
-    Benchmark::iter(&format!("solver-{}-{}", name, height), repeats, f)
-}
-
-fn benchmark_solver_1t<S, T>(name: &str, height: usize, repeats: usize) -> Benchmark
-where
-    T: MbState + 'static + Clone,
-    S: Solver<T> + 'static + Default,
-{
-    let width: usize = (3 * height) / 2;
-    let v = Viewbox::initial(width.try_into().unwrap(), height.try_into().unwrap());
-    let solver = S::default();
     let initial: T = v.into();
     let f = move || {
-        solver.solve(initial.clone());
+        solver.call(initial.clone());
     };
-    Benchmark::iter(&format!("solver-{}-{}", name, height), repeats, f)
+    Benchmark::iter(&format!("{}  {:>4}", name, height), repeats, f)
 }
+
+// fn benchmark_solver_1t<S, T>(name: &str, height: usize, repeats: usize) -> Benchmark
+// where
+//     T: MbState + 'static + Clone,
+//     S: Solver<T> + 'static + Default,
+// {
+//     let width: usize = (3 * height) / 2;
+//     let v = Viewbox::initial(width.try_into().unwrap(), height.try_into().unwrap());
+//     let solver = S::default();
+//     let initial: T = v.into();
+//     let f = move || {
+//         solver.solve(initial.clone());
+//     };
+//     Benchmark::iter(&format!("solver-{}-{}", name, height), repeats, f)
+// }
 
 fn benchmarks(height: usize, repeats: usize) -> Vec<Benchmark> {
     let mut benches = vec![];
     for t in thread_counts() {
         benches.push(benchmark_solver(
-            &format!("arr-{}", t),
-            MbArraySolver::default().threaded(t),
+            &format!("arr      {:>2}t", t),
+            ArraySolver::default().threaded(t),
             height,
             repeats,
         ));
         benches.push(benchmark_solver(
-            &format!("vec-{}", t),
-            MbVecSolver::default().threaded(t),
+            &format!("vec      {:>2}t", t),
+            VecSolver::default().threaded(t),
+            height,
+            repeats,
+        ));
+        benches.push(benchmark_solver(
+            &format!("simdvec  {:>2}t", t),
+            SimdVecSolver::default().threaded(t),
             height,
             repeats,
         ));
@@ -72,19 +76,5 @@ fn benchmarks(height: usize, repeats: usize) -> Vec<Benchmark> {
 }
 
 fn main() {
-    BenchmarkReport::with_benches(&[
-        benchmark_solver_1t::<MbVecSolver, MbVecState>("vec", 500, 1),
-        benchmark_solver_1t::<VecUvSolver, VecUvState>("vecuv", 500, 1),
-        benchmark_solver_1t::<MbArraySolver, MbArrayState>("arr", 500, 1),
-        benchmark_solver_1t::<MbVecSolver, MbVecState>("vec", 1000, 1),
-        benchmark_solver_1t::<VecUvSolver, VecUvState>("vecuv", 1000, 1),
-        benchmark_solver_1t::<MbArraySolver, MbArrayState>("arr", 1000, 1),
-        benchmark_solver_1t::<MbVecSolver, MbVecState>("vec", 2000, 1),
-        benchmark_solver_1t::<VecUvSolver, VecUvState>("vecuv", 2000, 1),
-        benchmark_solver_1t::<MbArraySolver, MbArrayState>("arr", 2000, 1),
-        benchmark_solver_1t::<MbVecSolver, MbVecState>("vec", 4000, 1),
-        benchmark_solver_1t::<VecUvSolver, VecUvState>("vecuv", 4000, 1),
-        benchmark_solver_1t::<MbArraySolver, MbArrayState>("arr", 4000, 1),
-    ])
-    .report("solver");
+    BenchmarkReport::with_benches(&benchmarks(1000, 10)).report("solver");
 }

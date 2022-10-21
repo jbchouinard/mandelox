@@ -1,8 +1,8 @@
 use mandelox::bench::{Benchmark, BenchmarkReport};
-use mandelox::solver::vecuv::VecUvState;
+use mandelox::solver::simdvec::SimdVecState;
 
 use mandelox::coord::Viewbox;
-use mandelox::solver::{MbArrayState, MbVecState};
+use mandelox::solver::{ArrayState, VecState};
 
 fn b_mbstate_init<T: From<Viewbox>>(name: &str, height: usize) -> Benchmark {
     let width: usize = 3 * height / 2;
@@ -16,9 +16,9 @@ fn b_mbstate_init<T: From<Viewbox>>(name: &str, height: usize) -> Benchmark {
 
 fn main() {
     BenchmarkReport::with_benches(&[
-        b_mbstate_init::<MbArrayState>("ndarray", 2000),
-        b_mbstate_init::<MbVecState>("vec", 2000),
-        b_mbstate_init::<VecUvState>("vecuv", 2000),
+        b_mbstate_init::<ArrayState>("ndarray", 2000),
+        b_mbstate_init::<VecState>("vec", 2000),
+        b_mbstate_init::<SimdVecState>("vecuv", 2000),
     ])
     .report("stateinit");
 }

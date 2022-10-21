@@ -5,8 +5,8 @@ use mandelox::painter::Greyscale;
 use mandelox::painter::IValuePainter;
 use mandelox::painter::Painter;
 use mandelox::solver::MbState;
-use mandelox::solver::MbVecSolver;
 use mandelox::solver::Solver;
+use mandelox::solver::VecSolver;
 use mandelox::threads::Call;
 use mandelox::threads::Join;
 use mandelox::threads::Split;
@@ -42,18 +42,18 @@ where
 
 fn main() {
     BenchmarkReport::with_benches(&[
-        benchmark_image::<MbVecSolver, _>(1, 500, true),
-        benchmark_image::<MbVecSolver, _>(2, 500, true),
-        benchmark_image::<MbVecSolver, _>(4, 500, true),
-        benchmark_image::<MbVecSolver, _>(8, 500, true),
-        benchmark_image::<MbVecSolver, _>(1, 1000, true),
-        benchmark_image::<MbVecSolver, _>(2, 1000, true),
-        benchmark_image::<MbVecSolver, _>(4, 1000, true),
-        benchmark_image::<MbVecSolver, _>(8, 1000, true),
-        benchmark_image::<MbVecSolver, _>(1, 2000, true),
-        benchmark_image::<MbVecSolver, _>(2, 2000, true),
-        benchmark_image::<MbVecSolver, _>(4, 2000, true),
-        benchmark_image::<MbVecSolver, _>(8, 2000, true),
+        benchmark_image::<VecSolver, _>(1, 500, true),
+        benchmark_image::<VecSolver, _>(2, 500, true),
+        benchmark_image::<VecSolver, _>(4, 500, true),
+        benchmark_image::<VecSolver, _>(8, 500, true),
+        benchmark_image::<VecSolver, _>(1, 1000, true),
+        benchmark_image::<VecSolver, _>(2, 1000, true),
+        benchmark_image::<VecSolver, _>(4, 1000, true),
+        benchmark_image::<VecSolver, _>(8, 1000, true),
+        benchmark_image::<VecSolver, _>(1, 2000, true),
+        benchmark_image::<VecSolver, _>(2, 2000, true),
+        benchmark_image::<VecSolver, _>(4, 2000, true),
+        benchmark_image::<VecSolver, _>(8, 2000, true),
     ])
     .report("image");
 }

@@ -11,7 +11,7 @@ use painter::Rainbow;
 
 use crate::coord::{Point, Viewbox};
 use crate::painter::{ColorScale, IValuePainter, Painter};
-use crate::solver::{MbState, MbVecSolver, MbVecState, Solver};
+use crate::solver::{MbState, SimdVecSolver, SimdVecState, Solver, VecSolver, VecState};
 use crate::threads::{Join, Split};
 
 pub mod bench;
@@ -84,6 +84,24 @@ where
     }
 }
 
+#[cfg(target_arch = "aarch64")]
+pub mod defaults {
+    use crate::solver::{VecSolver, VecState};
+    pub type Solver = VecSolver;
+    pub type State = VecState;
+}
+
+#[cfg(target_arch = "x86_64")]
+pub mod defaults {
+    use crate::solver::{SimdVecSolver, SimdVecState};
+    pub type Solver = SimdVecSolver;
+    pub type State = SimdVecState;
+}
+
+pub fn mandelbrot(width: i64, height: i64) -> Mandelbrot<defaults::State> {
+    Mandelbrot::<defaults::State>::initialize::<defaults::Solver>(width, height)
+}
+
 #[derive(Copy, Clone, Debug)]
 pub enum MAction {
     Resize(i64, i64),
@@ -123,19 +141,18 @@ impl MandelbrotWorker {
         shutdown: Arc<AtomicBool>,
     ) -> thread::JoinHandle<()> {
         thread::spawn(move || {
-            let mut m: Option<Mandelbrot<MbVecState>> = None;
+            let mut m: Option<Mandelbrot<defaults::State>> = None;
             loop {
                 if shutdown.load(Ordering::SeqCst) {
                     return;
                 }
                 let repaint = match rx.recv_timeout(Duration::from_millis(20)) {
                     Ok(MAction::Reset(w, h)) => {
-                        m = Some(Mandelbrot::initialize::<MbVecSolver>(w, h));
+                        m = Some(mandelbrot(w, h));
                         true
                     }
                     Ok(MAction::Resize(w, h)) => {
-                        let m =
-                            m.get_or_insert_with(|| Mandelbrot::initialize::<MbVecSolver>(w, h));
+                        let m = m.get_or_insert_with(|| mandelbrot(w, h));
                         m.resize(w, h);
                         true
                     }

@@ -4,12 +4,12 @@ use druid::piet::ImageFormat;
 use druid::{Data, ImageBuf};
 use image::RgbImage;
 
-use crate::solver::{MbArrayState, MbVecState};
+use crate::solver::{ArrayState, VecState};
 
 pub mod updater;
 pub mod widget;
 
-impl Data for MbArrayState {
+impl Data for ArrayState {
     fn same(&self, other: &Self) -> bool {
         self.width == other.width
             && self.height == other.height
@@ -18,7 +18,7 @@ impl Data for MbArrayState {
     }
 }
 
-impl Data for MbVecState {
+impl Data for VecState {
     fn same(&self, other: &Self) -> bool {
         self.width == other.width
             && self.height == other.height

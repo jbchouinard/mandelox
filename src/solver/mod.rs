@@ -2,14 +2,12 @@ use crate::coord::Viewbox;
 use crate::threads::{Call, Join, Split, WorkerPool};
 
 pub mod array;
-// pub mod cell;
-// pub mod sarray;
+pub mod simdvec;
 pub mod vec;
-pub mod vecuv;
 
-pub use array::{MbArraySolver, MbArrayState};
-pub use vec::{MbVecSolver, MbVecState};
-pub use vecuv::{VecUvSolver, VecUvState};
+pub use array::{ArraySolver, ArrayState};
+pub use simdvec::{SimdVecSolver, SimdVecState};
+pub use vec::{VecSolver, VecState};
 
 pub trait Solver<T> {
     fn solve(&self, state: T) -> T;
@@ -52,6 +50,6 @@ pub trait MbState: From<Viewbox> {
     fn i_value(&self, x: usize, y: usize) -> i16;
 }
 
-pub fn default_solver() -> WorkerPool<MbVecState, MbVecState> {
-    MbVecSolver::default().threaded(num_cpus::get_physical())
+pub fn default_solver() -> WorkerPool<VecState, VecState> {
+    VecSolver::default().threaded(num_cpus::get_physical())
 }

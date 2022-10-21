@@ -8,7 +8,7 @@ use crate::solver::{MbState, Solver};
 use crate::threads::{Join, RangeSplitter, Split};
 
 #[derive(Clone, Debug)]
-pub struct MbArrayState {
+pub struct ArrayState {
     pub(crate) width: usize,
     pub(crate) height: usize,
     pub(crate) iteration: i16,
@@ -17,7 +17,7 @@ pub struct MbArrayState {
     pub(crate) ia: Arc<Array2<i16>>,
 }
 
-impl From<Viewbox> for MbArrayState {
+impl From<Viewbox> for ArrayState {
     fn from(v: Viewbox) -> Self {
         let width = v.width as usize;
         let height = v.height as usize;
@@ -40,7 +40,7 @@ impl From<Viewbox> for MbArrayState {
     }
 }
 
-impl MbState for MbArrayState {
+impl MbState for ArrayState {
     fn width(&self) -> usize {
         self.width
     }
@@ -52,7 +52,7 @@ impl MbState for MbArrayState {
     }
 }
 
-impl Split for MbArrayState {
+impl Split for ArrayState {
     fn split_to_vec(self, n: usize) -> Vec<Self> {
         let mut split: Vec<Self> = vec![];
         for (m, n) in RangeSplitter::split(0, self.height, n) {
@@ -60,7 +60,7 @@ impl Split for MbArrayState {
             let ca: Array2<C<f64>> = self.ca.slice(slice).into_owned();
             let za: Array2<C<f64>> = self.za.slice(slice).into_owned();
             let ia: Array2<i16> = self.ia.slice(slice).into_owned();
-            split.push(MbArrayState {
+            split.push(ArrayState {
                 width: self.width,
                 height: n - m,
                 iteration: self.iteration,
@@ -73,8 +73,8 @@ impl Split for MbArrayState {
     }
 }
 
-impl Join for MbArrayState {
-    fn join_vec(states: Vec<MbArrayState>) -> Self {
+impl Join for ArrayState {
+    fn join_vec(states: Vec<ArrayState>) -> Self {
         let width = states[0].width;
         let iteration = states[0].iteration;
         let mut height = 0;
@@ -98,7 +98,7 @@ impl Join for MbArrayState {
         let ca = concatenate(Axis(0), &cas).unwrap();
         let za = concatenate(Axis(0), &zas).unwrap();
         let ia = concatenate(Axis(0), &ias).unwrap();
-        MbArrayState {
+        ArrayState {
             width,
             height,
             iteration,
@@ -110,12 +110,12 @@ impl Join for MbArrayState {
 }
 
 #[derive(Clone)]
-pub struct MbArraySolver {
+pub struct ArraySolver {
     iterations: u16,
     treshold: f64,
 }
 
-impl MbArraySolver {
+impl ArraySolver {
     pub fn new(treshold: f64, iterations: u16) -> Self {
         Self {
             treshold,
@@ -123,7 +123,7 @@ impl MbArraySolver {
         }
     }
 
-    fn iterate(&self, state: &MbArrayState) -> MbArrayState {
+    fn iterate(&self, state: &ArrayState) -> ArrayState {
         let mut new_za = Array2::zeros((state.height, state.width));
         let mut new_ia = Array2::zeros((state.height, state.width));
 
@@ -141,7 +141,7 @@ impl MbArraySolver {
                 };
             });
 
-        MbArrayState {
+        ArrayState {
             height: state.height(),
             width: state.width(),
             iteration: state.iteration + 1,
@@ -152,14 +152,14 @@ impl MbArraySolver {
     }
 }
 
-impl Default for MbArraySolver {
+impl Default for ArraySolver {
     fn default() -> Self {
         Self::new(2.0, 100)
     }
 }
 
-impl Solver<MbArrayState> for MbArraySolver {
-    fn solve(&self, mut state: MbArrayState) -> MbArrayState {
+impl Solver<ArrayState> for ArraySolver {
+    fn solve(&self, mut state: ArrayState) -> ArrayState {
         for _ in 0..self.iterations {
             state = self.iterate(&state);
         }

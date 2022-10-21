@@ -113,8 +113,8 @@ impl BenchmarkReport {
             println!(
                 "  {: <30} {}   {}",
                 name,
-                Unit::scaled(t, 10000).format(t, 6),
-                Unit::scaled(&t_per_call, 10000).format(&t_per_call, 6),
+                Unit::scaled(t, 100000).format(t, 6),
+                Unit::scaled(&t_per_call, 100000).format(&t_per_call, 6),
             )
         }
         stdout().flush().unwrap();
