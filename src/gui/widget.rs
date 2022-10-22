@@ -1,5 +1,6 @@
 use druid::widget::prelude::*;
 use druid::{Code, MouseButton, Size, Widget};
+use druid::text::TextLayout;
 
 use crate::gui::convert_image;
 use crate::MandelbrotWorker;
@@ -35,6 +36,18 @@ impl MandelbrotWidget {
     }
 }
 
+pub fn draw_text(ctx: &mut PaintCtx, env: &Env, x: f64, y: f64, text: String) {
+    let size = ctx.size();
+    let mut text_layout = TextLayout::new();
+    text_layout.set_text(text);
+    text_layout.rebuild_if_needed(ctx.text(), env);
+    ctx.draw_text(text_layout.layout().unwrap(), (size.width * x, size.height * y))
+}
+
+const ZOOM_FACTOR: f64 = 1.1;
+const ZOOM_WHEEL_FACTOR: f64 = 2000.0;
+const PAN_FACTOR: f64 = 0.025;
+
 impl Widget<()> for MandelbrotWidget {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut (), _env: &Env) {
         if self.worker.images_count() > 0 {
@@ -44,12 +57,12 @@ impl Widget<()> for MandelbrotWidget {
             Event::KeyDown(key_event) => {
                 use Code::*;
                 match key_event.code {
-                    ArrowUp => self.worker.pan_relative(0.0, -0.05),
-                    ArrowDown => self.worker.pan_relative(0.0, 0.05),
-                    ArrowLeft => self.worker.pan_relative(-0.05, 0.0),
-                    ArrowRight => self.worker.pan_relative(0.05, 0.0),
-                    PageUp => self.worker.zoom(1.2),
-                    PageDown => self.worker.zoom(1.0 / 1.2),
+                    ArrowUp => self.worker.pan_relative(0.0, -PAN_FACTOR),
+                    ArrowDown => self.worker.pan_relative(0.0, PAN_FACTOR),
+                    ArrowLeft => self.worker.pan_relative(-PAN_FACTOR, 0.0),
+                    ArrowRight => self.worker.pan_relative(PAN_FACTOR, 0.0),
+                    PageUp => self.worker.zoom(ZOOM_FACTOR),
+                    PageDown => self.worker.zoom(1.0 / ZOOM_FACTOR),
                     KeyR => self.worker.reset(self.width, self.height),
                     _ => (),
                 }
@@ -71,9 +84,9 @@ impl Widget<()> for MandelbrotWidget {
             Event::Wheel(mouse) => {
                 let delta_y = mouse.wheel_delta.y;
                 let zf = if delta_y > 0.0 {
-                    1.0 / (1.0 + delta_y / 1000.0)
+                    1.0 / (1.0 + delta_y / ZOOM_WHEEL_FACTOR)
                 } else {
-                    1.0 + delta_y / -1000.0
+                    1.0 + delta_y / -ZOOM_WHEEL_FACTOR
                 };
                 self.worker.zoom(zf);
             }

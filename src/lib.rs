@@ -1,5 +1,4 @@
 #![allow(clippy::new_without_default)]
-use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, RwLock};
@@ -149,16 +148,103 @@ pub enum MAction {
     Reset(i64, i64),
 }
 
-pub struct MandelbrotWorker {
+pub trait ActionQueue {
+    fn add(&self, action: MAction);
+}
+
+pub struct SyncActionQueue {
     tx: Sender<MAction>,
-    images: Arc<RwLock<VecDeque<RgbImage>>>,
+}
+
+impl SyncActionQueue {
+    pub fn new(tx: Sender<MAction>) -> Self {
+        Self { tx }
+    }
+}
+
+impl ActionQueue for SyncActionQueue {
+    fn add(&self, action: MAction) {
+        self.tx.send(action).unwrap()
+    }
+}
+
+pub struct BatchActionQueue {
+    q: Arc<RwLock<Vec<MAction>>>,
+}
+
+impl BatchActionQueue {
+    fn spawn_q_sender(q: Arc<RwLock<Vec<MAction>>>, tx: Sender<MAction>) -> thread::JoinHandle<()> {
+        thread::spawn(move || loop {
+            thread::sleep(Duration::from_millis(100));
+            let mut resize_x: i64 = 0;
+            let mut resize_y: i64 = 0;
+            let mut pan_x: i64 = 0;
+            let mut pan_y: i64 = 0;
+            let mut pan_rel_x: f64 = 0.0;
+            let mut pan_rel_y: f64 = 0.0;
+            let mut zoom: f64 = 1.0;
+            let messages: Vec<MAction> = std::mem::take(q.write().unwrap().as_mut());
+            for message in messages {
+                match message {
+                    MAction::Resize(x, y) => {
+                        resize_x = x;
+                        resize_y = y;
+                    }
+                    MAction::Pan(x, y) => {
+                        pan_x += x;
+                        pan_y += y;
+                    }
+                    MAction::PanRelative(x, y) => {
+                        pan_rel_x += x;
+                        pan_rel_y += y;
+                    }
+                    MAction::Zoom(f) => {
+                        zoom *= f;
+                    }
+                    MAction::Reset(_, _) => {
+                        tx.send(message).unwrap();
+                        continue;
+                    }
+                }
+            }
+            if resize_x != 0 && resize_y != 0 {
+                tx.send(MAction::Resize(resize_x, resize_y)).unwrap();
+            }
+            if pan_x != 0 || pan_y != 0 {
+                tx.send(MAction::Pan(pan_x, pan_y)).unwrap();
+            }
+            if pan_rel_x != 0.0 || pan_rel_y != 0.0 {
+                tx.send(MAction::PanRelative(pan_rel_x, pan_rel_y)).unwrap();
+            }
+            if zoom != 1.0 {
+                tx.send(MAction::Zoom(zoom)).unwrap();
+            }
+        })
+    }
+
+    pub fn new(tx: Sender<MAction>) -> Self {
+        let q = Arc::new(RwLock::new(vec![]));
+        BatchActionQueue::spawn_q_sender(q.clone(), tx);
+        Self { q }
+    }
+}
+
+impl ActionQueue for BatchActionQueue {
+    fn add(&self, action: MAction) {
+        self.q.write().unwrap().push(action);
+    }
+}
+
+pub struct MandelbrotWorker {
+    queue: Box<dyn ActionQueue>,
+    images: Arc<RwLock<Option<RgbImage>>>,
     shutdown: Arc<AtomicBool>,
 }
 
 impl MandelbrotWorker {
     fn spawn_receive_images(
         rx: Receiver<RgbImage>,
-        images: Arc<RwLock<VecDeque<RgbImage>>>,
+        images: Arc<RwLock<Option<RgbImage>>>,
         shutdown: Arc<AtomicBool>,
     ) -> thread::JoinHandle<()> {
         thread::spawn(move || loop {
@@ -166,7 +252,9 @@ impl MandelbrotWorker {
                 return;
             }
             match rx.recv_timeout(Duration::from_millis(20)) {
-                Ok(img) => images.write().unwrap().push_back(img),
+                Ok(img) => {
+                    images.write().unwrap().replace(img);
+                }
                 Err(RecvTimeoutError::Timeout) => (),
                 Err(RecvTimeoutError::Disconnected) => return,
             }
@@ -242,21 +330,21 @@ impl MandelbrotWorker {
     pub fn new() -> Self {
         let (tx_actions, rx_actions) = channel::<MAction>();
         let (tx_img, rx_img) = channel::<RgbImage>();
-        let images = Arc::new(RwLock::<VecDeque<RgbImage>>::new(VecDeque::new()));
+        let images = Arc::new(RwLock::<Option<RgbImage>>::new(None));
         let shutdown = Arc::new(AtomicBool::new(false));
 
         Self::spawn_receive_images(rx_img, images.clone(), shutdown.clone());
         Self::spawn_mandelbrot(rx_actions, tx_img, shutdown.clone());
 
         Self {
-            tx: tx_actions,
+            queue: Box::new(BatchActionQueue::new(tx_actions)),
             images,
             shutdown,
         }
     }
 
     fn send(&self, action: MAction) {
-        self.tx.send(action).unwrap();
+        self.queue.add(action);
     }
 
     pub fn reset(&self, width: i64, height: i64) {
@@ -280,11 +368,11 @@ impl MandelbrotWorker {
     }
 
     pub fn images_count(&self) -> usize {
-        self.images.read().unwrap().len()
+        usize::from(self.images.read().unwrap().is_some())
     }
 
     pub fn next_image(&self) -> Option<RgbImage> {
-        self.images.write().unwrap().pop_front()
+        self.images.write().unwrap().take()
     }
 }
 
