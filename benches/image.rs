@@ -21,7 +21,7 @@ where
     let scale = Viewbox::initial(width.try_into().unwrap(), height.try_into().unwrap());
 
     let solver = S::default().threaded(threads);
-    let initial = scale.into();
+    let initial = scale.generate_complex_coordinates().into();
     let solved = solver.call(initial);
 
     if paint {

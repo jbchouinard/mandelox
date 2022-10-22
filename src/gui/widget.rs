@@ -25,7 +25,6 @@ impl MandelbrotWidget {
         let height = f64::round(size.height) as i64;
         let width = f64::round(size.width) as i64;
         if !(self.width == width && self.height == height) {
-            println!("resize {}x{}", width, height);
             self.worker.resize(width, height);
             self.width = width;
             self.height = height;

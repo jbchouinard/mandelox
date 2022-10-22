@@ -7,11 +7,10 @@ use std::thread;
 use std::time::Duration;
 
 use image::RgbImage;
-use painter::Rainbow;
 
 use crate::coord::{Point, Viewbox};
-use crate::painter::{ColorScale, IValuePainter, Painter};
-use crate::solver::{MbState, SimdVecSolver, SimdVecState, Solver, VecSolver, VecState};
+use crate::painter::{ColorScale, IValuePainter, Painter, Rainbow};
+use crate::solver::{D2ArrayLike, MbState, Solver};
 use crate::threads::{Join, Split};
 
 pub mod bench;
@@ -39,7 +38,7 @@ where
     {
         let position = Viewbox::initial(width, height);
         let solver = S::default().threaded(num_cpus::get_physical());
-        let initial: T = position.into();
+        let initial: T = position.generate_complex_coordinates().into();
         let solved = solver.solve(initial);
         Self {
             position,
@@ -51,27 +50,35 @@ where
     pub fn resize(&mut self, width: i64, height: i64) {
         self.position.height = height;
         self.position.width = width;
-        self.state = self.solver.solve(self.position.into());
+        self.state = self
+            .solver
+            .solve(self.position.generate_complex_coordinates().into());
     }
 
     pub fn set_position(&mut self, position: Viewbox) {
         self.position = position;
-        self.state = self.solver.solve(self.position.into());
+        self.state = self
+            .solver
+            .solve(self.position.generate_complex_coordinates().into());
     }
 
     pub fn zoom(&mut self, factor: f64) {
         self.position.zoom(factor);
-        self.state = self.solver.solve(self.position.into());
+        self.state = self
+            .solver
+            .solve(self.position.generate_complex_coordinates().into());
     }
 
     pub fn pan(&mut self, x: i64, y: i64) {
         self.position.center = self.position.center.add(&Point::new(x, y));
-        self.state = self.solver.solve(self.position.into());
+        self.state = self
+            .solver
+            .solve(self.position.generate_complex_coordinates().into());
     }
 
     pub fn pan_relative(&mut self, x: f64, y: f64) {
-        let nx = f64::round(x * self.position.width as f64) as i64;
-        let ny = f64::round(y * self.position.height as f64) as i64;
+        let nx = (x * self.position.width as f64).round() as i64;
+        let ny = (y * self.position.height as f64).round() as i64;
         self.pan(nx, ny);
     }
 
@@ -84,19 +91,50 @@ where
     }
 }
 
-#[cfg(target_arch = "aarch64")]
+impl<T> Mandelbrot<T>
+where
+    T: D2ArrayLike + MbState + Split + Join + Send + 'static,
+{
+    pub fn pan_fast_vertical(&mut self, y: i64) {
+        self.position.center = self.position.center.add(&Point::new(0, y));
+        let new_coord_rows = self.position.generate_complex_coordinates().copy_rows(-y);
+        let new_state_rows = self.solver.solve(new_coord_rows.into());
+        self.state.shift_rows(-y, Some(&new_state_rows));
+    }
+    pub fn pan_fast_vertical_relative(&mut self, y: f64) {
+        let ny = (y * self.position.height as f64).round() as i64;
+        if ny != 0 {
+            self.pan_fast_vertical(ny)
+        }
+    }
+
+    pub fn pan_fast_horizontal(&mut self, x: i64) {
+        self.position.center = self.position.center.add(&Point::new(x, 0));
+        let new_coord_cols = self.position.generate_complex_coordinates().copy_cols(-x);
+        let new_stat_cols = self.solver.solve(new_coord_cols.into());
+        self.state.shift_cols(-x, Some(&new_stat_cols));
+    }
+    pub fn pan_fast_horizontal_relative(&mut self, x: f64) {
+        let nx = (x * self.position.width as f64).round() as i64;
+        if nx != 0 {
+            self.pan_fast_horizontal(nx)
+        }
+    }
+}
+
+// #[cfg(target_arch = "aarch64")]
 pub mod defaults {
     use crate::solver::{VecSolver, VecState};
     pub type Solver = VecSolver;
     pub type State = VecState;
 }
 
-#[cfg(target_arch = "x86_64")]
-pub mod defaults {
-    use crate::solver::{SimdVecSolver, SimdVecState};
-    pub type Solver = SimdVecSolver;
-    pub type State = SimdVecState;
-}
+// #[cfg(target_arch = "x86_64")]
+// pub mod defaults {
+//     use crate::solver::{SimdVecSolver, SimdVecState};
+//     pub type Solver = SimdVecSolver;
+//     pub type State = SimdVecState;
+// }
 
 pub fn mandelbrot(width: i64, height: i64) -> Mandelbrot<defaults::State> {
     Mandelbrot::<defaults::State>::initialize::<defaults::Solver>(width, height)
@@ -158,14 +196,24 @@ impl MandelbrotWorker {
                     }
                     Ok(MAction::Pan(x, y)) => match m {
                         Some(ref mut m) => {
-                            m.pan(x, y);
+                            if x != 0 {
+                                m.pan_fast_vertical(y);
+                            }
+                            if y != 0 {
+                                m.pan_fast_horizontal(x);
+                            }
                             true
                         }
                         None => false,
                     },
                     Ok(MAction::PanRelative(x, y)) => match m {
                         Some(ref mut m) => {
-                            m.pan_relative(x, y);
+                            if y != 0.0 {
+                                m.pan_fast_vertical_relative(y);
+                            }
+                            if x != 0.0 {
+                                m.pan_fast_horizontal_relative(x);
+                            }
                             true
                         }
                         None => false,

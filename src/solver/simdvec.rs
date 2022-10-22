@@ -2,7 +2,8 @@ use lazy_static::lazy_static;
 use ultraviolet::{f64x4, DMat2x4, DVec2x4};
 use wide::CmpGt;
 
-use crate::{Join, MbState, Solver, Split, Viewbox};
+use crate::complex::C;
+use crate::{coord::Coords, Join, MbState, Solver, Split};
 
 lazy_static! {
     static ref INF: f64x4 = f64x4::splat(f64::INFINITY);
@@ -90,9 +91,9 @@ impl MbState for SimdVecState {
     }
 }
 
-impl From<Viewbox> for SimdVecState {
-    fn from(v: Viewbox) -> Self {
-        let cs: Vec<num::complex::Complex<f64>> = v.generate_complex_coordinates();
+impl From<Coords<C<f64>>> for SimdVecState {
+    fn from(v: Coords<C<f64>>) -> Self {
+        let cs: Vec<num::complex::Complex<f64>> = v.values;
         assert!(cs.len() % 4 == 0, "oops");
         let mut state = Vec::with_capacity(cs.len() / 4);
 
@@ -108,8 +109,8 @@ impl From<Viewbox> for SimdVecState {
         }
 
         Self {
-            width: v.width as usize,
-            height: v.height as usize,
+            width: v.width,
+            height: v.height,
             state,
         }
     }
@@ -185,17 +186,19 @@ impl Solver<SimdVecState> for SimdVecSolver {
 #[cfg(test)]
 pub mod test {
     use super::*;
+    use crate::coord::Viewbox;
 
     #[test]
     fn test_complex4() {
         let treshold = f64x4::splat(100.0);
-        let SimdVecState { mut state, .. } = Viewbox::initial(8, 1).into();
+        let SimdVecState { mut state, .. } =
+            Viewbox::initial(8, 1).generate_complex_coordinates().into();
         let mut cell1 = state.pop().unwrap();
         let mut cell2 = state.pop().unwrap();
-        println!("{:?} {:?}", cell1.i, cell2.i);
+        // println!("{:?} {:?}", cell1.i, cell2.i);
 
         cell1.iterate(100, f64x4::splat(0.0), treshold);
         cell2.iterate(100, f64x4::splat(0.0), treshold);
-        println!("{:?} {:?}", cell1.i, cell2.i);
+        // println!("{:?} {:?}", cell1.i, cell2.i);
     }
 }

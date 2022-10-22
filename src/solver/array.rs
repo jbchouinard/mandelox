@@ -3,9 +3,10 @@ use std::sync::Arc;
 use ndarray::{concatenate, s, Array, Array1, Array2, Axis, Zip};
 
 use crate::complex::*;
-use crate::coord::Viewbox;
+use crate::coord::Coords;
 use crate::solver::{MbState, Solver};
 use crate::threads::{Join, RangeSplitter, Split};
+use crate::D2ArrayLike;
 
 #[derive(Clone, Debug)]
 pub struct ArrayState {
@@ -17,12 +18,12 @@ pub struct ArrayState {
     pub(crate) ia: Arc<Array2<i16>>,
 }
 
-impl From<Viewbox> for ArrayState {
-    fn from(v: Viewbox) -> Self {
-        let width = v.width as usize;
-        let height = v.height as usize;
+impl From<Coords<C<f64>>> for ArrayState {
+    fn from(v: Coords<C<f64>>) -> Self {
+        let width = v.width();
+        let height = v.height();
         let ca: Array2<C<f64>> = v
-            .generate_complex_coordinates()
+            .values
             .into_iter()
             .collect::<Array1<C<f64>>>()
             .into_shape((height, width))

@@ -28,7 +28,7 @@ where
 {
     let width: usize = (3 * height) / 2;
     let v = Viewbox::initial(width.try_into().unwrap(), height.try_into().unwrap());
-    let initial: T = v.into();
+    let initial: T = v.generate_complex_coordinates().into();
     let f = move || {
         solver.call(initial.clone());
     };

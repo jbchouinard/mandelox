@@ -1,27 +1,12 @@
-use num::{traits::NumOps, One};
-
-use crate::complex::*;
-
-trait Two {
-    fn two() -> Self;
-}
-
-impl<T> Two for T
-where
-    T: One + NumOps,
-{
-    fn two() -> Self {
-        T::one() + T::one()
-    }
-}
+use crate::{complex::*, solver::D2ArrayLike};
 
 #[derive(Copy, Clone, Debug)]
 pub struct Point<T>
 where
     T: num::Num + Copy,
 {
-    x: T,
-    y: T,
+    pub(crate) x: T,
+    pub(crate) y: T,
 }
 
 impl<T> Point<T>
@@ -37,6 +22,12 @@ where
     pub fn mul(&self, scalar: T) -> Self {
         Point::new(self.x * scalar, self.y * scalar)
     }
+    pub fn row_idx(&self, width: T) -> T {
+        self.y * width + self.x
+    }
+    pub fn col_idx(&self, height: T) -> T {
+        self.x * height + self.y
+    }
 }
 
 impl<T> Point<T>
@@ -46,6 +37,44 @@ where
 {
     pub fn as_f64(self) -> Point<f64> {
         Point::<f64>::new(self.x.try_into().unwrap(), self.y.try_into().unwrap())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Coords<T> {
+    pub(crate) width: usize,
+    pub(crate) height: usize,
+    pub(crate) values: Vec<T>,
+}
+
+impl<T> D2ArrayLike for Coords<T>
+where
+    T: Default + Clone,
+{
+    fn new(width: usize, height: usize) -> Self {
+        Self {
+            width,
+            height,
+            values: vec![T::default(); width * height],
+        }
+    }
+
+    fn width(&self) -> usize {
+        self.width
+    }
+
+    fn height(&self) -> usize {
+        self.height
+    }
+
+    fn copy_from(&mut self, other: &Self, from: Point<usize>, to: Point<usize>) {
+        let v = other.values[from.row_idx(other.width)].clone();
+        self.values[to.row_idx(self.width)] = v;
+    }
+
+    fn copy_self(&mut self, from: Point<usize>, to: Point<usize>) {
+        let v = self.values[from.row_idx(self.width)].clone();
+        self.values[to.row_idx(self.width)] = v;
     }
 }
 
@@ -95,12 +124,16 @@ impl Viewbox {
         cx + cy
     }
 
-    pub fn generate_complex_coordinates(&self) -> Vec<C<f64>> {
+    pub fn generate_complex_coordinates(&self) -> Coords<C<f64>> {
         let mut grid = vec![];
         for (x, y) in self.into_iter() {
             grid.push(self.unscaled(&Point::new(x, y)));
         }
-        grid
+        Coords {
+            values: grid,
+            width: self.width as usize,
+            height: self.height as usize,
+        }
     }
 }
 
@@ -160,14 +193,32 @@ impl IntoIterator for Viewbox {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::solver::D2ArrayLike;
+
+    fn print_arr(a: &Coords<C<f64>>) {
+        for y in 0..a.height() {
+            println!("{:?}", &a.values[y * a.width()..(y + 1) * a.width()]);
+        }
+        println!()
+    }
+
+    #[test]
+    fn test_2darray() {
+        let viewbox = Viewbox::initial(6, 6);
+        let mut arr1 = viewbox.generate_complex_coordinates();
+        let arr2 = viewbox.generate_complex_coordinates();
+        print_arr(&arr1);
+        arr1.shift_cols(-6, Some(&arr2.copy_cols(-6)));
+        print_arr(&arr1);
+    }
 
     #[test]
     fn test_viewbox_initial() {
         let mut viewbox = Viewbox::initial(6, 8);
         viewbox.center.y = 100;
         viewbox.center.x = 200;
-        let xy: Vec<(i64, i64)> = viewbox.into_iter().collect();
-        assert_eq!(xy.len(), 48);
+        let xy = viewbox.into_iter();
+        assert_eq!(xy.count(), 48);
         /*
         for n in 0..6 {
             println!("{:?}", &xy[6 * n..6 * (n + 1)]);

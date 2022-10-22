@@ -5,7 +5,9 @@ use mandelox::painter::Rainbow;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
+    #[structopt(short, long, default_value = "1200")]
     width: i64,
+    #[structopt(short, long, default_value = "1000")]
     height: i64,
     #[structopt(short, long, default_value = "out.png")]
     output: String,

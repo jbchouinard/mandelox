@@ -22,7 +22,6 @@ impl Data for VecState {
     fn same(&self, other: &Self) -> bool {
         self.width == other.width
             && self.height == other.height
-            && self.iteration == other.iteration
             && self.state[self.width + 2].c == other.state[self.width + 2].c
     }
 }

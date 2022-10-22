@@ -1,7 +1,9 @@
 use crate::complex::*;
-use crate::coord::Viewbox;
+use crate::coord::{Coords, Point};
 use crate::solver::{MbState, Solver};
 use crate::threads::{Join, Split};
+
+use super::D2ArrayLike;
 
 #[derive(Clone, Debug)]
 pub struct VecCell {
@@ -14,21 +16,19 @@ pub struct VecCell {
 pub struct VecState {
     pub(crate) width: usize,
     pub(crate) height: usize,
-    pub(crate) iteration: i16,
     pub(crate) state: Vec<VecCell>,
 }
 
-impl From<Viewbox> for VecState {
-    fn from(v: Viewbox) -> Self {
+impl From<Coords<C<f64>>> for VecState {
+    fn from(v: Coords<C<f64>>) -> Self {
         let state: Vec<VecCell> = v
-            .generate_complex_coordinates()
+            .values
             .into_iter()
             .map(|c| VecCell { c, z: c, i: -1 })
             .collect();
         Self {
-            width: v.width as usize,
-            height: v.height as usize,
-            iteration: 0,
+            width: v.width,
+            height: v.height,
             state,
         }
     }
@@ -59,7 +59,6 @@ impl Split for VecState {
                 width: self.width,
                 height,
                 state,
-                iteration: self.iteration,
             })
         }
         parts
@@ -70,20 +69,46 @@ impl Join for VecState {
     fn join_vec(parts: Vec<Self>) -> Self {
         let mut height = 0;
         let width = parts[0].width;
-        let iteration = parts[0].iteration;
         let mut state_parts: Vec<Vec<VecCell>> = vec![];
         for part in parts {
             assert!(part.width == width);
-            assert!(part.iteration == iteration);
             height += part.height;
             state_parts.push(part.state.clone());
         }
         Self {
             width,
             height,
-            iteration,
             state: Vec::join_vec(state_parts),
         }
+    }
+}
+
+impl D2ArrayLike for VecState {
+    fn new(width: usize, height: usize) -> Self {
+        Self {
+            width,
+            height,
+            state: vec![
+                VecCell {
+                    c: cr(0.0),
+                    z: cr(0.0),
+                    i: 0
+                };
+                width * height
+            ],
+        }
+    }
+    fn width(&self) -> usize {
+        self.width
+    }
+    fn height(&self) -> usize {
+        self.height
+    }
+    fn copy_from(&mut self, other: &Self, from: Point<usize>, to: Point<usize>) {
+        self.state[to.row_idx(self.width)] = other.state[from.row_idx(other.width)].clone();
+    }
+    fn copy_self(&mut self, from: Point<usize>, to: Point<usize>) {
+        self.state[to.row_idx(self.width)] = self.state[from.row_idx(self.width)].clone();
     }
 }
 
@@ -105,7 +130,6 @@ impl Solver<VecState> for VecSolver {
                 }
             }
         }
-        state.iteration = self.iterations as i16;
         state
     }
 }
